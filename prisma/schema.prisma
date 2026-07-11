@@ -1,0 +1,97 @@
+// Prisma schema — Social Scheduler
+// Para producción cambia el provider de "sqlite" a "postgresql" y ajusta DATABASE_URL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Platform {
+  FACEBOOK
+  INSTAGRAM
+  YOUTUBE
+}
+
+enum PostType {
+  FEED_POST
+  REEL
+  STORY
+  VIDEO // YouTube
+  SHORT // YouTube Shorts
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+model User {
+  id            String          @id @default(cuid())
+  name          String?
+  email         String          @unique
+  passwordHash  String
+  createdAt     DateTime        @default(now())
+  socialAccounts SocialAccount[]
+  scheduledPosts ScheduledPost[]
+}
+
+// Cada cuenta social conectada por un usuario (puede tener varias: 1 FB, 1 IG, 1 YT, o más)
+model SocialAccount {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  platform       Platform
+
+  // IDs específicos de cada plataforma
+  externalId     String   // Page ID (FB), IG Business Account ID, o YouTube Channel ID
+  displayName    String   // Nombre de la página/canal para mostrar en UI
+  avatarUrl      String?
+
+  // Tokens cifrados (nunca en texto plano)
+  accessToken    String   // cifrado con AES-256-GCM, ver lib/crypto.ts
+  refreshToken   String?  // cifrado (Google sí lo tiene, Meta usa long-lived tokens)
+  expiresAt      DateTime?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  scheduledPosts ScheduledPost[]
+
+  @@unique([userId, platform, externalId])
+}
+
+model ScheduledPost {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  socialAccountId String
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  platform        Platform
+  type            PostType
+
+  caption         String?
+  mediaUrl        String        // URL pública del video/imagen (S3, Cloudinary, etc.)
+  thumbnailUrl    String?       // opcional, para videos de YouTube
+
+  scheduledAt     DateTime      // fecha/hora en la que debe publicarse
+  status          PostStatus    @default(SCHEDULED)
+
+  // Resultado tras publicar
+  externalPostId  String?       // ID del post ya publicado en la plataforma
+  errorMessage    String?
+  publishedAt     DateTime?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([status, scheduledAt])
+}

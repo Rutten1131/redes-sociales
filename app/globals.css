@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+/* ---------- Design tokens ---------- */
+:root {
+  --bg: #0B0E14;
+  --surface: #131720;
+  --surface-raised: #181D28;
+  --border: #232838;
+  --text: #E7E9EE;
+  --text-muted: #8A93A6;
+
+  --accent: #6C5CE7;      /* violeta — acción primaria */
+  --accent-soft: #6C5CE71a;
+  --success: #2DD4BF;     /* teal — publicado */
+  --warning: #F5A623;     /* ámbar — programado / pendiente */
+  --danger: #F14668;      /* fallo */
+
+  --facebook: #1877F2;
+  --instagram: #E1306C;
+  --youtube: #FF0000;
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Utilidades pequeñas reutilizadas en todo el panel */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border-radius: 10px;
+  font-weight: 600;
+  transition: filter 0.15s ease;
+}
+.btn-primary:hover {
+  filter: brightness(1.1);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+}
+.input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.pulse-dot {
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot { animation: none; }
+}
