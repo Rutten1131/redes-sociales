@@ -24,6 +24,7 @@ export function getMetaAuthUrl(state: string) {
       "pages_manage_posts",
       "instagram_basic",
       "instagram_content_publish",
+      "business_management",
     ].join(","),
     response_type: "code",
   });
