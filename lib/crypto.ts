@@ -21,6 +21,7 @@ function getKey(): Buffer {
   if (buf.length !== 32) {
     throw new Error("TOKEN_ENCRYPTION_KEY debe decodificar a 32 bytes.");
   }
+  console.log("DEBUG_KEY_HASH:", buf.toString("hex").slice(0, 8));
   return buf;
 }
 
