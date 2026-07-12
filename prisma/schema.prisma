@@ -55,8 +55,8 @@ model SocialAccount {
   avatarUrl      String?
 
   // Tokens cifrados (nunca en texto plano)
-  accessToken    String   // cifrado con AES-256-GCM, ver lib/crypto.ts
-  refreshToken   String?  // cifrado (Google sí lo tiene, Meta usa long-lived tokens)
+  accessToken    String   @db.Text // cifrado con AES-256-GCM, ver lib/crypto.ts
+  refreshToken   String?  @db.Text // cifrado (Google sí lo tiene, Meta usa long-lived tokens)
   expiresAt      DateTime?
 
   createdAt      DateTime @default(now())
@@ -78,8 +78,8 @@ model ScheduledPost {
   platform        Platform
   type            PostType
 
-  caption         String?
-  mediaUrl        String        // URL pública del video/imagen (S3, Cloudinary, etc.)
+  caption         String?       @db.Text
+  mediaUrl        String        @db.Text // URL pública del video/imagen (S3, Cloudinary, etc.)
   thumbnailUrl    String?       // opcional, para videos de YouTube
 
   scheduledAt     DateTime      // fecha/hora en la que debe publicarse
