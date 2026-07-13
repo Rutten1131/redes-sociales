@@ -7,7 +7,7 @@ const AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const API_URL = "https://api.linkedin.com/v2";
 const REST_URL = "https://api.linkedin.com/rest";
-const LINKEDIN_VERSION = "202501"; // formato YYYYMM
+const LINKEDIN_VERSION = "202606"; // formato YYYYMM, ajustar periódicamente
 
 export function getLinkedInAuthUrl(state: string) {
   const params = new URLSearchParams({

@@ -119,6 +119,14 @@ export default function CalendarPage() {
   const [caption, setCaption] = useState("");
   const [scheduledTime, setScheduledTime] = useState("12:00");
 
+  // Editing state
+  const [editingPost, setEditingPost] = useState<ScheduledPost | null>(null);
+  const [editCaption, setEditCaption] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editTime, setEditTime] = useState("");
+  const [editMediaUrl, setEditMediaUrl] = useState("");
+  const [editUploading, setEditUploading] = useState(false);
+
   // Preview tab state
   const [previewTab, setPreviewTab] = useState<"FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN">("FACEBOOK");
 
@@ -157,6 +165,35 @@ export default function CalendarPage() {
       }
     }
   }, [selectedAccountIds, accounts]);
+
+  const getCompatibleAccounts = (type: string) => {
+    return accounts.filter(acc => {
+      if (type === "FEED_POST") {
+        return acc.platform === "FACEBOOK" || acc.platform === "INSTAGRAM" || acc.platform === "LINKEDIN";
+      }
+      if (type === "VIDEO_NORMAL") {
+        return true;
+      }
+      if (type === "REEL") {
+        return acc.platform === "FACEBOOK" || acc.platform === "INSTAGRAM" || acc.platform === "YOUTUBE";
+      }
+      if (type === "STORY") {
+        return acc.platform === "FACEBOOK" || acc.platform === "INSTAGRAM";
+      }
+      if (type === "CAROUSEL") {
+        return acc.platform === "FACEBOOK" || acc.platform === "INSTAGRAM" || acc.platform === "LINKEDIN";
+      }
+      return false;
+    });
+  };
+
+  // Auto-check all compatible accounts when post type changes or accounts load
+  useEffect(() => {
+    if (accounts.length > 0) {
+      const compatible = getCompatibleAccounts(postType);
+      setSelectedAccountIds(compatible.map(a => a.id));
+    }
+  }, [postType, accounts]);
 
   // Reset media type state when postType changes
   useEffect(() => {
@@ -348,6 +385,58 @@ export default function CalendarPage() {
     }
   }
 
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingPost) return;
+    try {
+      const [hours, minutes] = editTime.split(":");
+      const postDate = new Date(editDate + "T00:00:00");
+      postDate.setHours(parseInt(hours, 10));
+      postDate.setMinutes(parseInt(minutes, 10));
+      postDate.setSeconds(0);
+
+      const payload: Record<string, unknown> = {
+        id: editingPost.id,
+        caption: editCaption,
+        scheduledAt: postDate.toISOString(),
+      };
+      if (editMediaUrl && editMediaUrl !== editingPost.mediaUrl) {
+        payload.mediaUrl = editMediaUrl;
+      }
+
+      const res = await fetch(`/api/posts/schedule?businessId=${businessId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        throw new Error("No se pudo guardar la edición.");
+      }
+      setEditingPost(null);
+      loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Error al editar");
+    }
+  }
+
+  async function handleEditFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEditUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Error al subir archivo");
+      const data = await res.json();
+      setEditMediaUrl(data.url);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Error al subir archivo");
+    } finally {
+      setEditUploading(false);
+    }
+  }
+
   const toggleAccountSelection = (id: string) => {
     if (selectedAccountIds.includes(id)) {
       setSelectedAccountIds(selectedAccountIds.filter(x => x !== id));
@@ -360,40 +449,13 @@ export default function CalendarPage() {
     setCarouselItems(carouselItems.filter((_, idx) => idx !== idxToRemove));
   };
 
-  // Determine available post types based on selected platforms
-  const getAvailablePostTypes = () => {
-    const selectedPlatforms = accounts
-      .filter(a => selectedAccountIds.includes(a.id))
-      .map(a => a.platform);
-
-    const hasFacebook = selectedPlatforms.includes("FACEBOOK");
-    const hasInstagram = selectedPlatforms.includes("INSTAGRAM");
-    const hasYoutube = selectedPlatforms.includes("YOUTUBE");
-    const hasLinkedin = selectedPlatforms.includes("LINKEDIN");
-
-    // Standard types
-    if (hasYoutube && !hasFacebook && !hasInstagram && !hasLinkedin) {
-      return [
-        { value: "VIDEO", label: "Video" },
-        { value: "SHORT", label: "Short" },
-      ];
-    }
-
-    // Default Meta / LinkedIn / YouTube split
-    const types = [{ value: "FEED_POST", label: "Publicación" }];
-    if (hasFacebook || hasInstagram || hasLinkedin) {
-      types.push({ value: "REEL", label: "Reel" });
-    }
-    if (hasInstagram) {
-      types.push({ value: "STORY", label: "Historia" });
-    }
-    if (hasFacebook || hasInstagram) {
-      types.push({ value: "CAROUSEL", label: "Carrusel" });
-    }
-    return types;
-  };
-
-  const availableTypes = getAvailablePostTypes();
+  const ALL_FORMATS = [
+    { value: "FEED_POST", label: "Post" },
+    { value: "VIDEO_NORMAL", label: "Video normal" },
+    { value: "REEL", label: "Reel" },
+    { value: "STORY", label: "Historia" },
+    { value: "CAROUSEL", label: "Carrusel" },
+  ];
 
   // Highlight selected tab in mockup preview
   const activePreviewAccount = accounts.find(
@@ -450,9 +512,12 @@ export default function CalendarPage() {
             
             {/* Accounts Select Checkboxes */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300 block">Publicar en:</label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-300 block">Publicar en:</label>
+                <span className="text-[10px] text-gray-500 italic">Solo cuentas compatibles con "{ALL_FORMATS.find(f => f.value === postType)?.label}"</span>
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {accounts.map(acc => {
+                {getCompatibleAccounts(postType).map(acc => {
                   const isChecked = selectedAccountIds.includes(acc.id);
                   return (
                     <button
@@ -482,7 +547,7 @@ export default function CalendarPage() {
                   onChange={(e) => setPostType(e.target.value)}
                   className="input w-full px-3 py-2 text-sm bg-[#121214] border-white/10"
                 >
-                  {availableTypes.map(t => (
+                  {ALL_FORMATS.map(t => (
                     <option key={t.value} value={t.value}>{t.label}</option>
                   ))}
                 </select>
@@ -1007,9 +1072,38 @@ export default function CalendarPage() {
                       </p>
                     )}
 
-                    {/* Card Footer with Status */}
+                    {/* Card Footer with Actions and Status */}
                     <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-gray-500">
-                      <span>Estado:</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingPost(post);
+                            setEditCaption(post.caption || "");
+                            setEditMediaUrl(post.mediaUrl || "");
+                            const date = new Date(post.scheduledAt);
+                            setEditDate(date.toISOString().split("T")[0]);
+                            const hours = String(date.getHours()).padStart(2, "0");
+                            const minutes = String(date.getMinutes()).padStart(2, "0");
+                            setEditTime(`${hours}:${minutes}`);
+                          }}
+                          className="text-blue-400 hover:text-blue-300 font-semibold"
+                        >
+                          Editar
+                        </button>
+                        <span>·</span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!confirm("¿Eliminar esta publicación programada?")) return;
+                            await fetch(`/api/posts/schedule?id=${post.id}`, { method: "DELETE" });
+                            loadData();
+                          }}
+                          className="text-red-400 hover:text-red-300 font-semibold"
+                        >
+                          Borrar
+                        </button>
+                      </div>
                       <span className="font-bold" style={{ color: status.color }}>
                         {status.label}
                       </span>
@@ -1022,6 +1116,100 @@ export default function CalendarPage() {
           );
         })()}
       </div>
+      {/* Editing Modal overlay */}
+      {editingPost && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleEditSubmit} className="card p-6 w-full max-w-lg space-y-4 bg-[#121214] border border-white/10 rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-bold">Editar Publicación Programada</h3>
+
+            {/* Media preview + change */}
+            <div>
+              <label className="text-xs font-semibold text-gray-400 block mb-1">Imagen / Video:</label>
+              <div className="flex items-center gap-3">
+                <div className="w-20 h-20 rounded-lg bg-black/40 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                  {editMediaUrl ? (
+                    editMediaUrl.match(/\.(mp4|mov|webm)($|\?)/i) ? (
+                      <video src={editMediaUrl} className="w-full h-full object-cover" />
+                    ) : (
+                      <img src={editMediaUrl} alt="Preview" className="w-full h-full object-cover" />
+                    )
+                  ) : (
+                    <span className="text-[9px] text-gray-500">Sin archivo</span>
+                  )}
+                </div>
+                <label className="flex-1 cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*,video/*"
+                    onChange={handleEditFileSelect}
+                    className="hidden"
+                    disabled={editUploading}
+                  />
+                  <div className="px-3 py-2 border border-dashed border-white/15 rounded-lg text-center hover:bg-white/5 transition-colors">
+                    {editUploading ? (
+                      <span className="text-xs text-blue-400">Subiendo...</span>
+                    ) : (
+                      <span className="text-xs text-gray-300">Cambiar archivo multimedia</span>
+                    )}
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Caption */}
+            <div>
+              <label className="text-xs font-semibold text-gray-400 block mb-1">Descripción:</label>
+              <textarea
+                value={editCaption}
+                onChange={(e) => setEditCaption(e.target.value)}
+                rows={4}
+                className="input w-full px-3 py-2 text-sm bg-[#0a0a0b] border-white/10 resize-none text-white"
+              />
+            </div>
+
+            {/* Date + Time */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-400 block mb-1">Fecha:</label>
+                <input
+                  type="date"
+                  required
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  className="input w-full px-3 py-2 text-sm bg-[#0a0a0b] border-white/10 text-white"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-400 block mb-1">Hora:</label>
+                <input
+                  type="time"
+                  required
+                  value={editTime}
+                  onChange={(e) => setEditTime(e.target.value)}
+                  className="input w-full px-3 py-2 text-sm bg-[#0a0a0b] border-white/10 text-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingPost(null)}
+                className="px-4 py-2 border border-white/10 hover:bg-white/5 rounded-lg text-xs font-semibold text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={editUploading}
+                className="btn-primary px-4 py-2 rounded-lg text-xs font-semibold"
+              >
+                Guardar Cambios
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
