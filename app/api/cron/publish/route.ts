@@ -61,13 +61,14 @@ async function publishToPlatform(
   switch (post!.platform) {
     case "FACEBOOK": {
       const pageAccessToken = decryptToken(account.accessToken);
+      const isVideo = post!.mediaUrl.toLowerCase().match(/\.(mp4|mov|avi|mkv|webm|3gp|wmv)($|\?)/) !== null;
       const isReel = post!.type === "REEL";
       const res = await publishFacebookPost({
         pageId: account.externalId,
         pageAccessToken,
         message: post!.caption ?? undefined,
-        videoUrl: post!.type === "REEL" || post!.type === "VIDEO" ? post!.mediaUrl : undefined,
-        imageUrl: post!.type === "FEED_POST" ? post!.mediaUrl : undefined,
+        videoUrl: isVideo ? post!.mediaUrl : undefined,
+        imageUrl: !isVideo ? post!.mediaUrl : undefined,
         isReel,
       });
       return res.id ?? res.post_id ?? "unknown";
@@ -75,14 +76,21 @@ async function publishToPlatform(
 
     case "INSTAGRAM": {
       const accessToken = decryptToken(account.accessToken);
-      const mediaType =
-        post!.type === "REEL" ? "REELS" : post!.type === "STORY" ? "STORIES" : "IMAGE";
+      const isVideo = post!.mediaUrl.toLowerCase().match(/\.(mp4|mov|avi|mkv|webm|3gp|wmv)($|\?)/) !== null;
+      
+      let mediaType: "IMAGE" | "REELS" | "STORIES" = "IMAGE";
+      if (post!.type === "STORY") {
+        mediaType = "STORIES";
+      } else if (isVideo) {
+        mediaType = "REELS";
+      }
+
       const res = await publishInstagramMedia({
         igUserId: account.externalId,
         accessToken,
         caption: post!.caption ?? undefined,
-        videoUrl: mediaType !== "IMAGE" ? post!.mediaUrl : undefined,
-        imageUrl: mediaType === "IMAGE" ? post!.mediaUrl : undefined,
+        videoUrl: isVideo ? post!.mediaUrl : undefined,
+        imageUrl: !isVideo ? post!.mediaUrl : undefined,
         mediaType,
       });
       return res.id ?? "unknown";

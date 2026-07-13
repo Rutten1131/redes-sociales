@@ -41,7 +41,7 @@ export default function LoginPage() {
         throw new Error("Email o contraseña incorrectos");
       }
 
-      router.push("/dashboard/connect");
+      router.push("/dashboard");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ocurrió un error inesperado");

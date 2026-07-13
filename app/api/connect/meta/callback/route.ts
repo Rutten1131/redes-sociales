@@ -7,7 +7,6 @@ import {
   discoverPages,
 } from "@/lib/integrations/meta";
 
-// GET /api/connect/meta/callback?code=...&state=...
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
   const code = searchParams.get("code");
@@ -16,21 +15,28 @@ export async function GET(req: NextRequest) {
 
   const appUrl = process.env.NEXTAUTH_URL!;
 
-  if (error) {
-    return NextResponse.redirect(
-      new URL(`/dashboard/connect?error=${encodeURIComponent(error)}`, appUrl)
-    );
-  }
-  if (!code || !state) {
-    return NextResponse.redirect(new URL("/dashboard/connect?error=missing_code", appUrl));
+  let userId: string | undefined;
+  let businessId: string | undefined;
+
+  if (state) {
+    try {
+      const decoded = JSON.parse(Buffer.from(state, "base64url").toString());
+      userId = decoded.userId;
+      businessId = decoded.businessId;
+    } catch {
+      // Ignorar, se manejará abajo
+    }
   }
 
-  let userId: string;
-  try {
-    const decoded = JSON.parse(Buffer.from(state, "base64url").toString());
-    userId = decoded.userId;
-  } catch {
-    return NextResponse.redirect(new URL("/dashboard/connect?error=invalid_state", appUrl));
+  const redirectBase = businessId ? `/dashboard/${businessId}/connect` : "/dashboard";
+
+  if (error) {
+    return NextResponse.redirect(
+      new URL(`${redirectBase}?error=${encodeURIComponent(error)}`, appUrl)
+    );
+  }
+  if (!code || !state || !userId || !businessId) {
+    return NextResponse.redirect(new URL(`${redirectBase}?error=missing_parameters`, appUrl));
   }
 
   try {
@@ -45,7 +51,7 @@ export async function GET(req: NextRequest) {
 
     if (pages.length === 0) {
       return NextResponse.redirect(
-        new URL("/dashboard/connect?error=no_pages_found", appUrl)
+        new URL(`${redirectBase}?error=no_pages_found`, appUrl)
       );
     }
 
@@ -53,14 +59,14 @@ export async function GET(req: NextRequest) {
     for (const page of pages) {
       await prisma.socialAccount.upsert({
         where: {
-          userId_platform_externalId: {
-            userId,
+          businessId_platform_externalId: {
+            businessId,
             platform: "FACEBOOK",
             externalId: page.pageId,
           },
         },
         create: {
-          userId,
+          businessId,
           platform: "FACEBOOK",
           externalId: page.pageId,
           displayName: page.pageName,
@@ -75,14 +81,14 @@ export async function GET(req: NextRequest) {
       if (page.instagramBusinessAccountId) {
         await prisma.socialAccount.upsert({
           where: {
-            userId_platform_externalId: {
-              userId,
+            businessId_platform_externalId: {
+              businessId,
               platform: "INSTAGRAM",
               externalId: page.instagramBusinessAccountId,
             },
           },
           create: {
-            userId,
+            businessId,
             platform: "INSTAGRAM",
             externalId: page.instagramBusinessAccountId,
             displayName: page.instagramUsername ?? page.pageName,
@@ -97,11 +103,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.redirect(new URL("/dashboard/connect?success=meta", appUrl));
+    return NextResponse.redirect(new URL(`${redirectBase}?success=meta`, appUrl));
   } catch (err: any) {
     console.error("Meta OAuth callback error:", err);
     return NextResponse.redirect(
-      new URL(`/dashboard/connect?error=${encodeURIComponent(err.message)}`, appUrl)
+      new URL(`${redirectBase}?error=${encodeURIComponent(err.message)}`, appUrl)
     );
   }
 }

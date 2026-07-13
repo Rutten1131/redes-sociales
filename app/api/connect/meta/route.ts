@@ -1,19 +1,24 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getMetaAuthUrl } from "@/lib/integrations/meta";
+import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 
-// GET /api/connect/meta -> redirige al usuario a Facebook para autorizar
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.redirect(new URL("/login", process.env.NEXTAUTH_URL));
-  }
+  const appUrl = process.env.NEXTAUTH_URL!;
+  if (!session?.user?.id) return NextResponse.redirect(new URL("/login", appUrl));
 
-  // El "state" lleva el userId firmado para verificar en el callback que
-  // la respuesta corresponde al mismo usuario que inició el flujo.
+  const businessId = req.nextUrl.searchParams.get("businessId");
+  if (!businessId) return NextResponse.redirect(new URL("/dashboard", appUrl));
+
+  const business = await prisma.business.findFirst({
+    where: { id: businessId, userId: session.user.id },
+  });
+  if (!business) return NextResponse.redirect(new URL("/dashboard", appUrl));
+
   const state = Buffer.from(
-    JSON.stringify({ userId: session.user.id, nonce: crypto.randomUUID() })
+    JSON.stringify({ userId: session.user.id, businessId, nonce: crypto.randomUUID() })
   ).toString("base64url");
 
   const authUrl = getMetaAuthUrl(state);

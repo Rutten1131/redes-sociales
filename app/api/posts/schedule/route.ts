@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 const schema = z.object({
-  socialAccountId: z.string(),
+  socialAccountIds: z.array(z.string()).min(1),
   type: z.enum(["FEED_POST", "REEL", "STORY", "VIDEO", "SHORT"]),
   caption: z.string().optional(),
   mediaUrl: z.string().url(),
@@ -24,42 +24,63 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { socialAccountId, type, caption, mediaUrl, thumbnailUrl, scheduledAt } = parsed.data;
+  const { socialAccountIds, type, caption, mediaUrl, thumbnailUrl, scheduledAt } = parsed.data;
 
-  // Verificar que la cuenta social pertenece al usuario autenticado
-  const account = await prisma.socialAccount.findFirst({
-    where: { id: socialAccountId, userId: session.user.id },
-  });
-  if (!account) {
-    return NextResponse.json({ error: "Cuenta social no encontrada" }, { status: 404 });
-  }
-
-  const post = await prisma.scheduledPost.create({
-    data: {
-      userId: session.user.id,
-      socialAccountId,
-      platform: account.platform,
-      type,
-      caption,
-      mediaUrl,
-      thumbnailUrl,
-      scheduledAt: new Date(scheduledAt),
-      status: "SCHEDULED",
+  // Verificar que todas las cuentas sociales pertenecen a un negocio propiedad del usuario autenticado
+  const accounts = await prisma.socialAccount.findMany({
+    where: {
+      id: { in: socialAccountIds },
+      business: {
+        userId: session.user.id,
+      },
     },
   });
 
-  return NextResponse.json({ post });
+  if (accounts.length === 0) {
+    return NextResponse.json({ error: "Cuentas sociales no encontradas" }, { status: 404 });
+  }
+
+  const createdPosts = [];
+
+  for (const account of accounts) {
+    const post = await prisma.scheduledPost.create({
+      data: {
+        userId: session.user.id,
+        socialAccountId: account.id,
+        platform: account.platform,
+        type,
+        caption,
+        mediaUrl,
+        thumbnailUrl,
+        scheduledAt: new Date(scheduledAt),
+        status: "SCHEDULED",
+      },
+    });
+    createdPosts.push(post);
+  }
+
+  return NextResponse.json({ posts: createdPosts });
 }
 
-// GET /api/posts/schedule -> lista los posts programados del usuario
-export async function GET() {
+// GET /api/posts/schedule -> lista los posts programados del negocio
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
 
+  const businessId = req.nextUrl.searchParams.get("businessId");
+  if (!businessId) {
+    return NextResponse.json({ error: "Falta businessId" }, { status: 400 });
+  }
+
   const posts = await prisma.scheduledPost.findMany({
-    where: { userId: session.user.id },
+    where: {
+      userId: session.user.id,
+      socialAccount: {
+        businessId,
+      },
+    },
     include: { socialAccount: true },
     orderBy: { scheduledAt: "asc" },
   });

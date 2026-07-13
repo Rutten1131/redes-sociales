@@ -37,15 +37,26 @@ model User {
   email         String          @unique
   passwordHash  String
   createdAt     DateTime        @default(now())
-  socialAccounts SocialAccount[]
+  businesses    Business[]
   scheduledPosts ScheduledPost[]
 }
 
-// Cada cuenta social conectada por un usuario (puede tener varias: 1 FB, 1 IG, 1 YT, o más)
+// Un "Negocio" = un cliente. Cada uno tiene sus propias cuentas conectadas.
+model Business {
+  id             String          @id @default(cuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade, map: "fk_business_user")
+  name           String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  socialAccounts SocialAccount[]
+}
+
+// Cada cuenta social conectada por un negocio
 model SocialAccount {
   id             String   @id @default(cuid())
-  userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade, map: "fk_social_account_business")
 
   platform       Platform
 
@@ -64,7 +75,7 @@ model SocialAccount {
 
   scheduledPosts ScheduledPost[]
 
-  @@unique([userId, platform, externalId])
+  @@unique([businessId, platform, externalId])
 }
 
 model ScheduledPost {

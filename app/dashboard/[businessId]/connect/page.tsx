@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useParams } from "next/navigation";
 
 interface SocialAccount {
   id: string;
@@ -13,12 +13,13 @@ interface SocialAccount {
 }
 
 const PLATFORM_META = {
-  FACEBOOK: { label: "Facebook", color: "var(--facebook)", connectPath: "/api/connect/meta" },
-  INSTAGRAM: { label: "Instagram", color: "var(--instagram)", connectPath: "/api/connect/meta" },
-  YOUTUBE: { label: "YouTube", color: "var(--youtube)", connectPath: "/api/connect/youtube" },
+  FACEBOOK: { label: "Facebook", color: "var(--facebook)" },
+  INSTAGRAM: { label: "Instagram", color: "var(--instagram)" },
+  YOUTUBE: { label: "YouTube", color: "var(--youtube)" },
 } as const;
 
 export default function ConnectPage() {
+  const { businessId } = useParams<{ businessId: string }>();
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const searchParams = useSearchParams();
@@ -27,8 +28,9 @@ export default function ConnectPage() {
   const [nowMs] = useState(() => Date.now());
 
   async function loadAccounts() {
+    if (!businessId) return;
     setLoading(true);
-    const res = await fetch("/api/accounts");
+    const res = await fetch(`/api/accounts?businessId=${businessId}`);
     const data = await res.json();
     setAccounts(data.accounts ?? []);
     setLoading(false);
@@ -36,14 +38,14 @@ export default function ConnectPage() {
 
   useEffect(() => {
     loadAccounts();
-  }, []);
+  }, [businessId]);
 
   async function disconnect(id: string) {
     if (!confirm("¿Desconectar esta cuenta? Los posts programados con ella dejarán de poder publicarse.")) return;
     await fetch("/api/accounts", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
+      body: JSON.stringify({ id, businessId }),
     });
     loadAccounts();
   }
@@ -67,11 +69,11 @@ export default function ConnectPage() {
       )}
 
       <div className="flex gap-3 mb-8">
-        <a href="/api/connect/meta" className="btn-primary px-4 py-2 text-sm">
+        <a href={`/api/connect/meta?businessId=${businessId}`} className="btn-primary px-4 py-2 text-sm">
           + Conectar Facebook / Instagram
         </a>
         <a
-          href="/api/connect/youtube"
+          href={`/api/connect/youtube?businessId=${businessId}`}
           className="px-4 py-2 text-sm rounded-lg font-semibold"
           style={{ background: "var(--youtube)", color: "white" }}
         >

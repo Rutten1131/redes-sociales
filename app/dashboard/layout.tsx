@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { auth, signOut } from "@/auth";
+import SidebarNav from "./SidebarNav";
 
 export default async function DashboardLayout({
   children,
@@ -22,20 +22,7 @@ export default async function DashboardLayout({
             <span className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--instagram)" }} />
             <span className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--youtube)" }} />
           </div>
-          <nav className="flex flex-col gap-1 text-sm">
-            <Link
-              href="/dashboard/connect"
-              className="px-3 py-2 rounded-lg hover:bg-white/5 transition-colors"
-            >
-              Cuentas conectadas
-            </Link>
-            <Link
-              href="/dashboard/calendar"
-              className="px-3 py-2 rounded-lg hover:bg-white/5 transition-colors"
-            >
-              Calendario
-            </Link>
-          </nav>
+          <SidebarNav />
         </div>
 
         <div>

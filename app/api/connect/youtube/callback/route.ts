@@ -11,21 +11,28 @@ export async function GET(req: NextRequest) {
 
   const appUrl = process.env.NEXTAUTH_URL!;
 
-  if (error) {
-    return NextResponse.redirect(
-      new URL(`/dashboard/connect?error=${encodeURIComponent(error)}`, appUrl)
-    );
-  }
-  if (!code || !state) {
-    return NextResponse.redirect(new URL("/dashboard/connect?error=missing_code", appUrl));
+  let userId: string | undefined;
+  let businessId: string | undefined;
+
+  if (state) {
+    try {
+      const decoded = JSON.parse(Buffer.from(state, "base64url").toString());
+      userId = decoded.userId;
+      businessId = decoded.businessId;
+    } catch {
+      // Ignorar, se manejará abajo
+    }
   }
 
-  let userId: string;
-  try {
-    const decoded = JSON.parse(Buffer.from(state, "base64url").toString());
-    userId = decoded.userId;
-  } catch {
-    return NextResponse.redirect(new URL("/dashboard/connect?error=invalid_state", appUrl));
+  const redirectBase = businessId ? `/dashboard/${businessId}/connect` : "/dashboard";
+
+  if (error) {
+    return NextResponse.redirect(
+      new URL(`${redirectBase}?error=${encodeURIComponent(error)}`, appUrl)
+    );
+  }
+  if (!code || !state || !userId || !businessId) {
+    return NextResponse.redirect(new URL(`${redirectBase}?error=missing_parameters`, appUrl));
   }
 
   try {
@@ -35,7 +42,7 @@ export async function GET(req: NextRequest) {
       // Pasa si el usuario ya había autorizado antes sin "prompt=consent".
       // Con prompt=consent forzado en getYoutubeAuthUrl esto no debería ocurrir.
       return NextResponse.redirect(
-        new URL("/dashboard/connect?error=no_refresh_token", appUrl)
+        new URL(`${redirectBase}?error=no_refresh_token`, appUrl)
       );
     }
 
@@ -43,14 +50,14 @@ export async function GET(req: NextRequest) {
 
     await prisma.socialAccount.upsert({
       where: {
-        userId_platform_externalId: {
-          userId,
+        businessId_platform_externalId: {
+          businessId,
           platform: "YOUTUBE",
           externalId: channel.channelId,
         },
       },
       create: {
-        userId,
+        businessId,
         platform: "YOUTUBE",
         externalId: channel.channelId,
         displayName: channel.title,
@@ -68,11 +75,11 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.redirect(new URL("/dashboard/connect?success=youtube", appUrl));
+    return NextResponse.redirect(new URL(`${redirectBase}?success=youtube`, appUrl));
   } catch (err: any) {
     console.error("YouTube OAuth callback error:", err);
     return NextResponse.redirect(
-      new URL(`/dashboard/connect?error=${encodeURIComponent(err.message)}`, appUrl)
+      new URL(`${redirectBase}?error=${encodeURIComponent(err.message)}`, appUrl)
     );
   }
 }
