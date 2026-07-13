@@ -222,3 +222,100 @@ export async function publishInstagramMedia(params: {
   if (!res.ok) throw new Error(`Error publicando en Instagram: ${await res.text()}`);
   return res.json();
 }
+
+// ---------- Carrusel de Facebook ----------
+
+export async function publishFacebookCarousel(params: {
+  pageId: string;
+  pageAccessToken: string;
+  message?: string;
+  items: { url: string; type: "IMAGE" | "VIDEO" }[];
+}) {
+  const { pageId, pageAccessToken, message, items } = params;
+
+  // Paso 1: subir cada media sin publicar
+  const mediaIds: string[] = [];
+  for (const item of items) {
+    const endpoint = item.type === "VIDEO" ? "videos" : "photos";
+    const body = new URLSearchParams({
+      access_token: pageAccessToken,
+      published: "false",
+      ...(item.type === "VIDEO" ? { file_url: item.url } : { url: item.url }),
+    });
+    const res = await fetch(`${GRAPH_URL}/${pageId}/${endpoint}`, { method: "POST", body });
+    if (!res.ok) throw new Error(`Error subiendo media del carrusel FB: ${await res.text()}`);
+    const data = await res.json();
+    mediaIds.push(data.id);
+  }
+
+  // Paso 2: crear el post en /feed con todas las medias adjuntas
+  const feedBody = new URLSearchParams({
+    access_token: pageAccessToken,
+    message: message ?? "",
+  });
+  mediaIds.forEach((id, index) => {
+    feedBody.set(`attached_media[${index}]`, JSON.stringify({ media_fbid: id }));
+  });
+
+  const feedRes = await fetch(`${GRAPH_URL}/${pageId}/feed`, { method: "POST", body: feedBody });
+  if (!feedRes.ok) throw new Error(`Error publicando carrusel en Facebook: ${await feedRes.text()}`);
+  return feedRes.json();
+}
+
+// ---------- Carrusel de Instagram ----------
+
+export async function publishInstagramCarousel(params: {
+  igUserId: string;
+  accessToken: string;
+  caption?: string;
+  items: { url: string; type: "IMAGE" | "VIDEO" }[];
+}) {
+  const { igUserId, accessToken, caption, items } = params;
+
+  if (items.length < 2 || items.length > 10) {
+    throw new Error("Un carrusel de Instagram debe tener entre 2 y 10 elementos.");
+  }
+
+  // Paso 1: crear cada child container
+  const childIds: string[] = [];
+  for (const item of items) {
+    const body = new URLSearchParams({
+      access_token: accessToken,
+      is_carousel_item: "true",
+      ...(item.type === "VIDEO"
+        ? { media_type: "VIDEO", video_url: item.url }
+        : { image_url: item.url }),
+    });
+    const res = await fetch(`${GRAPH_URL}/${igUserId}/media`, { method: "POST", body });
+    if (!res.ok) throw new Error(`Error creando item del carrusel IG: ${await res.text()}`);
+    const data = await res.json();
+    childIds.push(data.id);
+  }
+
+  // Esperar procesamiento de videos
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type === "VIDEO") {
+      await waitUntilContainerReady(childIds[i], accessToken);
+    }
+  }
+
+  // Paso 2: crear el contenedor padre tipo CAROUSEL
+  const parentBody = new URLSearchParams({
+    access_token: accessToken,
+    media_type: "CAROUSEL",
+    children: childIds.join(","),
+    ...(caption ? { caption } : {}),
+  });
+  const parentRes = await fetch(`${GRAPH_URL}/${igUserId}/media`, { method: "POST", body: parentBody });
+  if (!parentRes.ok) throw new Error(`Error creando carrusel de IG: ${await parentRes.text()}`);
+  const parentData = await parentRes.json();
+
+  // Paso 3: publicar el carrusel
+  const publishBody = new URLSearchParams({
+    access_token: accessToken,
+    creation_id: parentData.id,
+  });
+  const publishRes = await fetch(`${GRAPH_URL}/${igUserId}/media_publish`, { method: "POST", body: publishBody });
+  if (!publishRes.ok) throw new Error(`Error publicando carrusel en Instagram: ${await publishRes.text()}`);
+  return publishRes.json();
+}

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { decryptToken, encryptToken } from "@/lib/crypto";
-import { publishFacebookPost, publishInstagramMedia } from "@/lib/integrations/meta";
+import { publishFacebookPost, publishInstagramMedia, publishFacebookCarousel, publishInstagramCarousel } from "@/lib/integrations/meta";
 import { refreshYoutubeToken, uploadYoutubeVideo } from "@/lib/integrations/youtube";
+import { publishLinkedInPost } from "@/lib/integrations/linkedin";
 
 /**
  * Este endpoint debe llamarse periódicamente (cada 5 min, por ejemplo) desde:
@@ -57,11 +58,26 @@ async function publishToPlatform(
   }
 ): Promise<string> {
   const account = post!.socialAccount;
+  const isVideo = post!.mediaUrl.toLowerCase().match(/\.(mp4|mov|avi|mkv|webm|3gp|wmv)($|\?)/) !== null;
 
   switch (post!.platform) {
     case "FACEBOOK": {
       const pageAccessToken = decryptToken(account.accessToken);
-      const isVideo = post!.mediaUrl.toLowerCase().match(/\.(mp4|mov|avi|mkv|webm|3gp|wmv)($|\?)/) !== null;
+
+      if (post!.type === "CAROUSEL") {
+        const items = await prisma.mediaItem.findMany({
+          where: { postId: post!.id },
+          orderBy: { order: "asc" },
+        });
+        const res = await publishFacebookCarousel({
+          pageId: account.externalId,
+          pageAccessToken,
+          message: post!.caption ?? undefined,
+          items: items.map((i) => ({ url: i.url, type: i.type })),
+        });
+        return res.id ?? res.post_id ?? "unknown";
+      }
+
       const isReel = post!.type === "REEL";
       const res = await publishFacebookPost({
         pageId: account.externalId,
@@ -76,8 +92,21 @@ async function publishToPlatform(
 
     case "INSTAGRAM": {
       const accessToken = decryptToken(account.accessToken);
-      const isVideo = post!.mediaUrl.toLowerCase().match(/\.(mp4|mov|avi|mkv|webm|3gp|wmv)($|\?)/) !== null;
-      
+
+      if (post!.type === "CAROUSEL") {
+        const items = await prisma.mediaItem.findMany({
+          where: { postId: post!.id },
+          orderBy: { order: "asc" },
+        });
+        const res = await publishInstagramCarousel({
+          igUserId: account.externalId,
+          accessToken,
+          caption: post!.caption ?? undefined,
+          items: items.map((i) => ({ url: i.url, type: i.type })),
+        });
+        return res.id ?? "unknown";
+      }
+
       let mediaType: "IMAGE" | "REELS" | "STORIES" = "IMAGE";
       if (post!.type === "STORY") {
         mediaType = "STORIES";
@@ -110,7 +139,7 @@ async function publishToPlatform(
         },
       });
 
-      // Descargar el video desde el storage (Cloudinary/S3) para subirlo a YouTube
+      // Descargar el video desde el storage (BunnyCDN) para subirlo a YouTube
       const videoRes = await fetch(post!.mediaUrl);
       if (!videoRes.ok) throw new Error("No se pudo descargar el video desde mediaUrl.");
       const videoBuffer = Buffer.from(await videoRes.arrayBuffer());
@@ -124,6 +153,17 @@ async function publishToPlatform(
         privacyStatus: "public",
       });
       return res.id ?? "unknown";
+    }
+
+    case "LINKEDIN": {
+      const accessToken = decryptToken(account.accessToken);
+      const res = await publishLinkedInPost({
+        accessToken,
+        authorUrn: `urn:li:person:${account.externalId}`,
+        text: post!.caption ?? "",
+        imageUrl: !isVideo ? post!.mediaUrl : undefined,
+      });
+      return res.id;
     }
 
     default:

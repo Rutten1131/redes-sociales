@@ -5,7 +5,7 @@ import { useSearchParams, useParams } from "next/navigation";
 
 interface SocialAccount {
   id: string;
-  platform: "FACEBOOK" | "INSTAGRAM" | "YOUTUBE";
+  platform: "FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN";
   displayName: string;
   avatarUrl: string | null;
   externalId: string;
@@ -16,6 +16,7 @@ const PLATFORM_META = {
   FACEBOOK: { label: "Facebook", color: "var(--facebook)" },
   INSTAGRAM: { label: "Instagram", color: "var(--instagram)" },
   YOUTUBE: { label: "YouTube", color: "var(--youtube)" },
+  LINKEDIN: { label: "LinkedIn", color: "#0A66C2" },
 } as const;
 
 export default function ConnectPage() {
@@ -68,7 +69,7 @@ export default function ConnectPage() {
         </div>
       )}
 
-      <div className="flex gap-3 mb-8">
+      <div className="flex gap-3 mb-8 flex-wrap">
         <a href={`/api/connect/meta?businessId=${businessId}`} className="btn-primary px-4 py-2 text-sm">
           + Conectar Facebook / Instagram
         </a>
@@ -78,6 +79,13 @@ export default function ConnectPage() {
           style={{ background: "var(--youtube)", color: "white" }}
         >
           + Conectar YouTube
+        </a>
+        <a
+          href={`/api/connect/linkedin?businessId=${businessId}`}
+          className="px-4 py-2 text-sm rounded-lg font-semibold"
+          style={{ background: "#0A66C2", color: "white" }}
+        >
+          + Conectar LinkedIn
         </a>
       </div>
 

@@ -5,14 +5,21 @@ import { useParams } from "next/navigation";
 
 interface SocialAccount {
   id: string;
-  platform: "FACEBOOK" | "INSTAGRAM" | "YOUTUBE";
+  platform: "FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN";
   displayName: string;
   avatarUrl: string | null;
 }
 
+interface MediaItem {
+  id: string;
+  url: string;
+  type: "IMAGE" | "VIDEO";
+  order: number;
+}
+
 interface ScheduledPost {
   id: string;
-  platform: "FACEBOOK" | "INSTAGRAM" | "YOUTUBE";
+  platform: "FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN";
   type: string;
   caption: string | null;
   mediaUrl: string;
@@ -20,6 +27,7 @@ interface ScheduledPost {
   status: "DRAFT" | "SCHEDULED" | "PUBLISHING" | "PUBLISHED" | "FAILED";
   errorMessage: string | null;
   socialAccount: { displayName: string; avatarUrl: string | null };
+  mediaItems?: MediaItem[];
 }
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
@@ -36,6 +44,54 @@ const MONTHS = [
 ];
 
 const YEARS = [2026, 2027, 2028];
+
+// Component to handle rendering carousels with simple slider dots
+function CarouselPreview({ items }: { items: { url: string; type: "IMAGE" | "VIDEO" }[] }) {
+  const [index, setIndex] = useState(0);
+
+  if (items.length === 0) {
+    return <span className="text-xs text-gray-500">Ningún archivo subido</span>;
+  }
+
+  const current = items[index];
+
+  return (
+    <div className="relative w-full h-full group">
+      {current.type === "VIDEO" ? (
+        <video src={current.url} controls className="w-full h-full object-cover" />
+      ) : (
+        <img src={current.url} alt={`Slide ${index + 1}`} className="w-full h-full object-cover" />
+      )}
+
+      {items.length > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setIndex((index - 1 + items.length) % items.length)}
+            className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            onClick={() => setIndex((index + 1) % items.length)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            ›
+          </button>
+          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">
+            {items.map((_, i) => (
+              <span
+                key={i}
+                className={`w-1.5 h-1.5 rounded-full ${i === index ? "bg-white" : "bg-white/40"}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function CalendarPage() {
   const { businessId } = useParams<{ businessId: string }>();
@@ -57,16 +113,17 @@ export default function CalendarPage() {
   const [postType, setPostType] = useState("FEED_POST");
   const [mediaUrl, setMediaUrl] = useState("");
   const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [carouselItems, setCarouselItems] = useState<{ url: string; type: "IMAGE" | "VIDEO" }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
   const [caption, setCaption] = useState("");
   const [scheduledTime, setScheduledTime] = useState("12:00");
 
   // Preview tab state
-  const [previewTab, setPreviewTab] = useState<"FACEBOOK" | "INSTAGRAM" | "YOUTUBE">("FACEBOOK");
+  const [previewTab, setPreviewTab] = useState<"FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN">("FACEBOOK");
 
   // Day posts filter tab
-  const [dayFilter, setDayFilter] = useState<"ALL" | "FACEBOOK" | "INSTAGRAM" | "YOUTUBE">("ALL");
+  const [dayFilter, setDayFilter] = useState<"ALL" | "FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN">("ALL");
 
   async function loadData() {
     if (!businessId) return;
@@ -98,36 +155,47 @@ export default function CalendarPage() {
       if (firstSelected) {
         setPreviewTab(firstSelected.platform);
       }
-    } else if (accounts.length > 0) {
-      setPreviewTab(accounts[0].platform);
     }
   }, [selectedAccountIds, accounts]);
 
-  // Calculate days in the selected month
-  const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
-  const getFirstDayOfMonth = (year: number, month: number) => {
-    const day = new Date(year, month, 1).getDay();
-    return day === 0 ? 6 : day - 1; // Adjust so week starts on Monday
+  // Reset media type state when postType changes
+  useEffect(() => {
+    setMediaUrl("");
+    setMediaFile(null);
+    setCarouselItems([]);
+    setUploadProgress("");
+  }, [postType]);
+
+  // Get days in month
+  const getDaysInMonth = (year: number, month: number) => {
+    return new Date(year, month + 1, 0).getDate();
   };
 
-  const daysInMonth = getDaysInMonth(currentYear, currentMonth);
-  const firstDayIndex = getFirstDayOfMonth(currentYear, currentMonth);
+  // Get first day of month (0 = Sunday, 1 = Monday...)
+  const getFirstDayOfMonth = (year: number, month: number) => {
+    const day = new Date(year, month, 1).getDay();
+    return day === 0 ? 6 : day - 1; // Adjust so Monday is 0, Sunday is 6
+  };
 
-  // Generate calendar days
-  const calendarCells: { date: Date; isCurrentMonth: boolean }[] = [];
-  
-  // Previous month padding
+  // Generate calendar cells
+  const daysInMonth = getDaysInMonth(currentYear, currentMonth);
+  const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
+
   const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
   const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
   const daysInPrevMonth = getDaysInMonth(prevYear, prevMonth);
-  for (let i = firstDayIndex - 1; i >= 0; i--) {
+
+  const calendarCells: { date: Date; isCurrentMonth: boolean }[] = [];
+
+  // Previous month fill cells
+  for (let i = firstDay - 1; i >= 0; i--) {
     calendarCells.push({
       date: new Date(prevYear, prevMonth, daysInPrevMonth - i),
       isCurrentMonth: false,
     });
   }
 
-  // Current month days
+  // Current month cells
   for (let i = 1; i <= daysInMonth; i++) {
     calendarCells.push({
       date: new Date(currentYear, currentMonth, i),
@@ -135,28 +203,17 @@ export default function CalendarPage() {
     });
   }
 
-  // Next month padding
+  // Next month fill cells to complete grid row (7 columns)
+  const remaining = 42 - calendarCells.length; // 6 rows * 7 columns = 42
   const nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
   const nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
-  const remainingCells = 42 - calendarCells.length;
-  for (let i = 1; i <= remainingCells; i++) {
+  for (let i = 1; i <= remaining; i++) {
     calendarCells.push({
       date: new Date(nextYear, nextMonth, i),
       isCurrentMonth: false,
     });
   }
 
-  // Filter posts for selected day
-  const selectedDayPosts = posts.filter(post => {
-    const postDate = new Date(post.scheduledAt);
-    return (
-      postDate.getFullYear() === selectedDate.getFullYear() &&
-      postDate.getMonth() === selectedDate.getMonth() &&
-      postDate.getDate() === selectedDate.getDate()
-    );
-  });
-
-  // Check if a cell has posts
   const getPostsForDate = (date: Date) => {
     return posts.filter(post => {
       const postDate = new Date(post.scheduledAt);
@@ -187,17 +244,16 @@ export default function CalendarPage() {
   };
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setMediaFile(file);
-    setMediaUrl("");
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
     setFormError(null);
     setUploading(true);
     setUploadProgress("Subiendo archivo a BunnyCDN…");
 
     try {
+      const singleFile = files[0];
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", singleFile);
 
       const res = await fetch("/api/upload", {
         method: "POST",
@@ -210,11 +266,18 @@ export default function CalendarPage() {
       }
 
       const data = await res.json();
-      setMediaUrl(data.url);
-      setUploadProgress(`✓ Subido con éxito`);
+      const isVideo = singleFile.type.startsWith("video") || singleFile.name.endsWith(".mp4") || singleFile.name.endsWith(".mov");
+
+      if (postType === "CAROUSEL") {
+        setCarouselItems([...carouselItems, { url: data.url, type: isVideo ? "VIDEO" : "IMAGE" }]);
+        setUploadProgress(`✓ Subido slide ${carouselItems.length + 1} con éxito`);
+      } else {
+        setMediaFile(singleFile);
+        setMediaUrl(data.url);
+        setUploadProgress(`✓ Subido con éxito`);
+      }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Error al subir archivo");
-      setMediaFile(null);
       setUploadProgress("");
     } finally {
       setUploading(false);
@@ -229,9 +292,17 @@ export default function CalendarPage() {
       setFormError("Selecciona al menos una cuenta social.");
       return;
     }
-    if (!mediaUrl) {
-      setFormError("Por favor sube una imagen o un video.");
-      return;
+
+    if (postType === "CAROUSEL") {
+      if (carouselItems.length < 2) {
+        setFormError("Por favor sube al menos 2 archivos para el carrusel.");
+        return;
+      }
+    } else {
+      if (!mediaUrl) {
+        setFormError("Por favor sube una imagen o un video.");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -242,16 +313,20 @@ export default function CalendarPage() {
       postDate.setMinutes(parseInt(minutes, 10));
       postDate.setSeconds(0);
 
+      const payload = {
+        socialAccountIds: selectedAccountIds,
+        type: postType,
+        caption: caption || undefined,
+        scheduledAt: postDate.toISOString(),
+        ...(postType === "CAROUSEL"
+          ? { mediaItems: carouselItems }
+          : { mediaUrl }),
+      };
+
       const res = await fetch(`/api/posts/schedule?businessId=${businessId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          socialAccountIds: selectedAccountIds,
-          type: postType,
-          mediaUrl,
-          caption: caption || undefined,
-          scheduledAt: postDate.toISOString(),
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -262,6 +337,7 @@ export default function CalendarPage() {
       setShowForm(false);
       setMediaUrl("");
       setMediaFile(null);
+      setCarouselItems([]);
       setUploadProgress("");
       setCaption("");
       loadData();
@@ -280,6 +356,10 @@ export default function CalendarPage() {
     }
   };
 
+  const removeCarouselItem = (idxToRemove: number) => {
+    setCarouselItems(carouselItems.filter((_, idx) => idx !== idxToRemove));
+  };
+
   // Determine available post types based on selected platforms
   const getAvailablePostTypes = () => {
     const selectedPlatforms = accounts
@@ -289,22 +369,26 @@ export default function CalendarPage() {
     const hasFacebook = selectedPlatforms.includes("FACEBOOK");
     const hasInstagram = selectedPlatforms.includes("INSTAGRAM");
     const hasYoutube = selectedPlatforms.includes("YOUTUBE");
+    const hasLinkedin = selectedPlatforms.includes("LINKEDIN");
 
     // Standard types
-    if (hasYoutube && !hasFacebook && !hasInstagram) {
+    if (hasYoutube && !hasFacebook && !hasInstagram && !hasLinkedin) {
       return [
         { value: "VIDEO", label: "Video" },
         { value: "SHORT", label: "Short" },
       ];
     }
 
-    // Default Meta / YouTube split
+    // Default Meta / LinkedIn / YouTube split
     const types = [{ value: "FEED_POST", label: "Publicación" }];
-    if (hasFacebook || hasInstagram) {
+    if (hasFacebook || hasInstagram || hasLinkedin) {
       types.push({ value: "REEL", label: "Reel" });
     }
     if (hasInstagram) {
       types.push({ value: "STORY", label: "Historia" });
+    }
+    if (hasFacebook || hasInstagram) {
+      types.push({ value: "CAROUSEL", label: "Carrusel" });
     }
     return types;
   };
@@ -315,6 +399,14 @@ export default function CalendarPage() {
   const activePreviewAccount = accounts.find(
     a => a.platform === previewTab && (selectedAccountIds.length === 0 || selectedAccountIds.includes(a.id))
   ) || accounts.find(a => a.platform === previewTab) || { displayName: "Tu Cuenta", avatarUrl: null };
+
+  const selectedDayPosts = getPostsForDate(selectedDate);
+
+  const previewMediaItems = postType === "CAROUSEL"
+    ? carouselItems
+    : mediaUrl
+      ? [{ url: mediaUrl, type: (mediaFile?.type.startsWith("video") || mediaUrl.endsWith(".mp4") || mediaUrl.endsWith(".mov") ? "VIDEO" as const : "IMAGE" as const) }]
+      : [];
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -408,9 +500,41 @@ export default function CalendarPage() {
               </div>
             </div>
 
+            {/* Carousel Uploads display if Carousel type */}
+            {postType === "CAROUSEL" && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-300 block">Elementos del Carrusel ({carouselItems.length}/10):</label>
+                {carouselItems.length > 0 && (
+                  <div className="flex gap-2 flex-wrap p-2 border border-white/10 rounded-lg bg-black/20">
+                    {carouselItems.map((item, idx) => (
+                      <div key={idx} className="relative w-16 h-16 rounded overflow-hidden border border-white/15 bg-zinc-900 flex items-center justify-center">
+                        {item.type === "VIDEO" ? (
+                          <video src={item.url} className="w-full h-full object-cover" />
+                        ) : (
+                          <img src={item.url} alt="Carousel item" className="w-full h-full object-cover" />
+                        )}
+                        <span className="absolute top-0 left-0 bg-black/70 text-white text-[9px] font-bold px-1 rounded-br">
+                          {idx + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeCarouselItem(idx)}
+                          className="absolute bottom-0 right-0 bg-red-600/80 hover:bg-red-600 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-tl"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Media Upload Area */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300 block">Archivo multimedia:</label>
+              <label className="text-sm font-medium text-gray-300 block">
+                {postType === "CAROUSEL" ? "Agregar archivo multimedia al carrusel:" : "Archivo multimedia:"}
+              </label>
               <label
                 className="card p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors border-dashed border-2 border-white/10 rounded-lg"
               >
@@ -419,12 +543,19 @@ export default function CalendarPage() {
                   accept="image/*,video/*"
                   onChange={handleFileSelect}
                   className="hidden"
-                  disabled={uploading}
+                  disabled={uploading || (postType === "CAROUSEL" && carouselItems.length >= 10)}
                 />
                 {uploading ? (
                   <div className="text-center">
                     <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                     <p className="text-sm text-blue-400">{uploadProgress}</p>
+                  </div>
+                ) : postType === "CAROUSEL" ? (
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-gray-200">
+                      {carouselItems.length >= 10 ? "Límite de 10 elementos alcanzado" : "+ Agregar foto o video a BunnyCDN"}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">El carrusel de Instagram soporta entre 2 y 10 elementos</p>
                   </div>
                 ) : mediaUrl ? (
                   <div className="text-center">
@@ -467,34 +598,24 @@ export default function CalendarPage() {
 
           {/* Live Mockup Preview Side */}
           <div className="lg:col-span-5 flex flex-col">
-            <div className="flex bg-[#121214] border border-white/10 rounded-t-lg overflow-hidden shrink-0">
-              <button
-                type="button"
-                onClick={() => setPreviewTab("FACEBOOK")}
-                className={`flex-1 py-2.5 text-xs font-semibold transition-all ${
-                  previewTab === "FACEBOOK" ? "bg-white/5 border-b-2 border-blue-500 text-white" : "text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                Facebook
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreviewTab("INSTAGRAM")}
-                className={`flex-1 py-2.5 text-xs font-semibold transition-all ${
-                  previewTab === "INSTAGRAM" ? "bg-white/5 border-b-2 border-pink-500 text-white" : "text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                Instagram
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreviewTab("YOUTUBE")}
-                className={`flex-1 py-2.5 text-xs font-semibold transition-all ${
-                  previewTab === "YOUTUBE" ? "bg-white/5 border-b-2 border-red-500 text-white" : "text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                YouTube
-              </button>
+            <div className="flex bg-[#121214] border border-white/10 rounded-t-lg overflow-hidden shrink-0 flex-wrap">
+              {[
+                { key: "FACEBOOK" as const, label: "Facebook", border: "border-blue-500" },
+                { key: "INSTAGRAM" as const, label: "Instagram", border: "border-pink-500" },
+                { key: "YOUTUBE" as const, label: "YouTube", border: "border-red-500" },
+                { key: "LINKEDIN" as const, label: "LinkedIn", border: "border-blue-400" },
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setPreviewTab(tab.key)}
+                  className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold transition-all ${
+                    previewTab === tab.key ? `bg-white/5 border-b-2 ${tab.border} text-white` : "text-gray-400 hover:text-gray-200"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
             <div className="flex-1 card rounded-t-none border-t-0 p-6 flex items-center justify-center min-h-[350px]">
@@ -514,15 +635,7 @@ export default function CalendarPage() {
                     {caption || "Escribe una descripción en el formulario para ver la vista previa..."}
                   </p>
                   <div className="aspect-video w-full rounded-md bg-black/40 overflow-hidden flex items-center justify-center border border-white/5">
-                    {mediaUrl ? (
-                      mediaFile?.type.startsWith("video") || mediaUrl.endsWith(".mp4") || mediaUrl.endsWith(".mov") ? (
-                        <video src={mediaUrl} controls className="w-full h-full object-cover" />
-                      ) : (
-                        <img src={mediaUrl} alt="Preview" className="w-full h-full object-cover" />
-                      )
-                    ) : (
-                      <span className="text-xs text-gray-500">Ningún archivo subido</span>
-                    )}
+                    <CarouselPreview items={previewMediaItems} />
                   </div>
                 </div>
               )}
@@ -537,17 +650,8 @@ export default function CalendarPage() {
                     <p className="font-semibold">{activePreviewAccount.displayName}</p>
                   </div>
                   
-                  {/* Photo or video display */}
                   <div className="aspect-square w-full bg-zinc-900 overflow-hidden flex items-center justify-center">
-                    {mediaUrl ? (
-                      mediaFile?.type.startsWith("video") || mediaUrl.endsWith(".mp4") || mediaUrl.endsWith(".mov") ? (
-                        <video src={mediaUrl} controls className="w-full h-full object-cover" />
-                      ) : (
-                        <img src={mediaUrl} alt="Preview" className="w-full h-full object-cover" />
-                      )
-                    ) : (
-                      <span className="text-xs text-gray-500">Ningún archivo subido</span>
-                    )}
+                    <CarouselPreview items={previewMediaItems} />
                   </div>
 
                   {/* Actions bar */}
@@ -569,15 +673,7 @@ export default function CalendarPage() {
               {previewTab === "YOUTUBE" && (
                 <div className="w-full max-w-sm bg-[#0f0f0f] border border-white/10 rounded-lg p-3 text-white text-xs shadow-md">
                   <div className="aspect-video w-full rounded-lg bg-zinc-800 overflow-hidden flex items-center justify-center mb-3">
-                    {mediaUrl ? (
-                      mediaFile?.type.startsWith("video") || mediaUrl.endsWith(".mp4") || mediaUrl.endsWith(".mov") ? (
-                        <video src={mediaUrl} controls className="w-full h-full object-cover" />
-                      ) : (
-                        <img src={mediaUrl} alt="Preview" className="w-full h-full object-cover" />
-                      )
-                    ) : (
-                      <span className="text-xs text-gray-500">Ningún archivo subido</span>
-                    )}
+                    <CarouselPreview items={previewMediaItems} />
                   </div>
                   <h3 className="font-bold text-sm line-clamp-2">
                     {postType === "SHORT" ? "#Shorts" : ""} {caption ? caption.slice(0, 60) : "Título del Video"}
@@ -590,6 +686,27 @@ export default function CalendarPage() {
                       <p className="font-semibold">{activePreviewAccount.displayName}</p>
                       <p className="text-[10px] text-gray-400">Hace un momento</p>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* LINKEDIN PREVIEW */}
+              {previewTab === "LINKEDIN" && (
+                <div className="w-full max-w-sm bg-[#1e1f20] border border-white/10 rounded-lg p-4 text-white text-sm shadow-md">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-[#0A66C2] flex items-center justify-center font-bold text-xs uppercase text-white">
+                      {activePreviewAccount.displayName[0]}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-xs">{activePreviewAccount.displayName}</p>
+                      <p className="text-[10px] text-gray-400">Hace un momento · 🌐</p>
+                    </div>
+                  </div>
+                  <p className="whitespace-pre-wrap text-xs mb-3 text-gray-200 min-h-[14px]">
+                    {caption || "Escribe una descripción..."}
+                  </p>
+                  <div className="aspect-video w-full rounded-md bg-black/40 overflow-hidden flex items-center justify-center border border-white/5">
+                    <CarouselPreview items={previewMediaItems} />
                   </div>
                 </div>
               )}
@@ -684,6 +801,7 @@ export default function CalendarPage() {
                       let dotColor = "bg-blue-500";
                       if (post.platform === "INSTAGRAM") dotColor = "bg-pink-500";
                       if (post.platform === "YOUTUBE") dotColor = "bg-red-500";
+                      if (post.platform === "LINKEDIN") dotColor = "bg-sky-500";
                       return (
                         <span
                           key={post.id}
@@ -727,12 +845,13 @@ export default function CalendarPage() {
         </div>
 
         {/* Filter Tabs */}
-        <div className="flex gap-1 mb-6 bg-white/[0.03] p-1 rounded-lg w-fit">
+        <div className="flex gap-1 mb-6 bg-white/[0.03] p-1 rounded-lg w-fit flex-wrap">
           {[
             { key: "ALL" as const, label: "Todos", color: "text-white" },
             { key: "FACEBOOK" as const, label: "Facebook", color: "text-blue-400" },
             { key: "INSTAGRAM" as const, label: "Instagram", color: "text-pink-400" },
             { key: "YOUTUBE" as const, label: "YouTube", color: "text-red-400" },
+            { key: "LINKEDIN" as const, label: "LinkedIn", color: "text-sky-400" },
           ].map(tab => {
             const count = tab.key === "ALL"
               ? selectedDayPosts.length
@@ -776,6 +895,10 @@ export default function CalendarPage() {
               const status = STATUS_META[post.status];
               const isVideo = post.mediaUrl.endsWith(".mp4") || post.mediaUrl.endsWith(".mov");
 
+              const carouselMedias = post.type === "CAROUSEL" && post.mediaItems
+                ? post.mediaItems.map(i => ({ url: i.url, type: i.type }))
+                : post.mediaUrl ? [{ url: post.mediaUrl, type: isVideo ? ("VIDEO" as const) : ("IMAGE" as const) }] : [];
+
               return (
                 <div key={post.id} className="flex flex-col border border-white/10 rounded-lg overflow-hidden bg-[#121214] shadow-lg">
                   {/* Card Header with Status and Platform info */}
@@ -783,6 +906,7 @@ export default function CalendarPage() {
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
                       post.platform === "FACEBOOK" ? "bg-blue-600/10 text-blue-400 border border-blue-600/20" :
                       post.platform === "INSTAGRAM" ? "bg-pink-600/10 text-pink-400 border border-pink-600/20" :
+                      post.platform === "LINKEDIN" ? "bg-sky-600/10 text-sky-400 border border-sky-600/20" :
                       "bg-red-600/10 text-red-400 border border-red-600/20"
                     }`}>
                       {post.platform} · {post.type}
@@ -813,11 +937,7 @@ export default function CalendarPage() {
                           {post.caption || "Sin descripción"}
                         </p>
                         <div className="aspect-video w-full rounded-md bg-black/40 overflow-hidden flex items-center justify-center border border-white/5">
-                          {isVideo ? (
-                            <video src={post.mediaUrl} controls className="w-full h-full object-cover" />
-                          ) : (
-                            <img src={post.mediaUrl} alt="Facebook Post" className="w-full h-full object-cover" />
-                          )}
+                          <CarouselPreview items={carouselMedias} />
                         </div>
                       </div>
                     )}
@@ -832,11 +952,7 @@ export default function CalendarPage() {
                           <p className="font-semibold text-[11px]">{post.socialAccount.displayName}</p>
                         </div>
                         <div className="aspect-square w-full rounded-md bg-black/40 overflow-hidden flex items-center justify-center border border-white/5">
-                          {isVideo ? (
-                            <video src={post.mediaUrl} controls className="w-full h-full object-cover" />
-                          ) : (
-                            <img src={post.mediaUrl} alt="Instagram Post" className="w-full h-full object-cover" />
-                          )}
+                          <CarouselPreview items={carouselMedias} />
                         </div>
                         <p className="line-clamp-2">
                           <span className="font-semibold mr-1">{post.socialAccount.displayName}</span>
@@ -849,11 +965,7 @@ export default function CalendarPage() {
                     {post.platform === "YOUTUBE" && (
                       <div className="text-white text-xs space-y-2">
                         <div className="aspect-video w-full rounded-md bg-black/40 overflow-hidden flex items-center justify-center border border-white/5">
-                          {isVideo ? (
-                            <video src={post.mediaUrl} controls className="w-full h-full object-cover" />
-                          ) : (
-                            <img src={post.mediaUrl} alt="YouTube Video" className="w-full h-full object-cover" />
-                          )}
+                          <CarouselPreview items={carouselMedias} />
                         </div>
                         <h4 className="font-bold line-clamp-2 text-gray-100">
                           {post.type === "SHORT" ? "#Shorts " : ""}{post.caption || "Título del Video"}
@@ -867,10 +979,31 @@ export default function CalendarPage() {
                       </div>
                     )}
 
+                    {/* LINKEDIN Layout */}
+                    {post.platform === "LINKEDIN" && (
+                      <div className="text-white text-xs space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-[#0A66C2] flex items-center justify-center font-bold text-[10px] uppercase text-white">
+                            {post.socialAccount.displayName[0]}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-[11px]">{post.socialAccount.displayName}</p>
+                            <p className="text-[9px] text-gray-400">Programado</p>
+                          </div>
+                        </div>
+                        <p className="whitespace-pre-wrap text-gray-200 line-clamp-3">
+                          {post.caption || "Sin descripción"}
+                        </p>
+                        <div className="aspect-video w-full rounded-md bg-black/40 overflow-hidden flex items-center justify-center border border-white/5">
+                          <CarouselPreview items={carouselMedias} />
+                        </div>
+                      </div>
+                    )}
+
                     {/* Error display if failed */}
                     {post.status === "FAILED" && post.errorMessage && (
                       <p className="text-[10px] text-red-500 bg-red-950/20 p-2 rounded border border-red-500/20">
-                        Error: {post.errorMessage}
+                         Error: {post.errorMessage}
                       </p>
                     )}
 

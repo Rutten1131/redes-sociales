@@ -13,6 +13,7 @@ enum Platform {
   FACEBOOK
   INSTAGRAM
   YOUTUBE
+  LINKEDIN
 }
 
 enum PostType {
@@ -21,6 +22,7 @@ enum PostType {
   STORY
   VIDEO // YouTube
   SHORT // YouTube Shorts
+  CAROUSEL
 }
 
 enum PostStatus {
@@ -101,8 +103,24 @@ model ScheduledPost {
   errorMessage    String?
   publishedAt     DateTime?
 
+  mediaItems      MediaItem[]
+
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   @@index([status, scheduledAt])
+}
+
+model MediaItem {
+  id      String        @id @default(cuid())
+  postId  String
+  post    ScheduledPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  url     String        @db.Text
+  type    MediaType
+  order   Int           // orden dentro del carrusel, empezando en 0
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
 }

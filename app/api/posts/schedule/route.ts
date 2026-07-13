@@ -3,11 +3,17 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
+const mediaItemSchema = z.object({
+  url: z.string().url(),
+  type: z.enum(["IMAGE", "VIDEO"]),
+});
+
 const schema = z.object({
   socialAccountIds: z.array(z.string()).min(1),
-  type: z.enum(["FEED_POST", "REEL", "STORY", "VIDEO", "SHORT"]),
+  type: z.enum(["FEED_POST", "REEL", "STORY", "VIDEO", "SHORT", "CAROUSEL"]),
   caption: z.string().optional(),
-  mediaUrl: z.string().url(),
+  mediaUrl: z.string().url().optional(),       // opcional para CAROUSEL
+  mediaItems: z.array(mediaItemSchema).optional(), // solo para CAROUSEL
   thumbnailUrl: z.string().url().optional(),
   scheduledAt: z.string(), // ISO date string
 });
@@ -24,7 +30,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { socialAccountIds, type, caption, mediaUrl, thumbnailUrl, scheduledAt } = parsed.data;
+  const { socialAccountIds, type, caption, mediaUrl, mediaItems, thumbnailUrl, scheduledAt } = parsed.data;
+
+  // Validación: CAROUSEL necesita mediaItems, el resto necesita mediaUrl
+  if (type === "CAROUSEL" && (!mediaItems || mediaItems.length < 2)) {
+    return NextResponse.json({ error: "Un carrusel necesita al menos 2 archivos." }, { status: 400 });
+  }
+  if (type !== "CAROUSEL" && !mediaUrl) {
+    return NextResponse.json({ error: "Se requiere mediaUrl para este tipo de post." }, { status: 400 });
+  }
 
   // Verificar que todas las cuentas sociales pertenecen a un negocio propiedad del usuario autenticado
   const accounts = await prisma.socialAccount.findMany({
@@ -50,10 +64,21 @@ export async function POST(req: NextRequest) {
         platform: account.platform,
         type,
         caption,
-        mediaUrl,
+        mediaUrl: mediaUrl ?? "",
         thumbnailUrl,
         scheduledAt: new Date(scheduledAt),
         status: "SCHEDULED",
+        ...(type === "CAROUSEL" && mediaItems
+          ? {
+              mediaItems: {
+                create: mediaItems.map((item, index) => ({
+                  url: item.url,
+                  type: item.type,
+                  order: index,
+                })),
+              },
+            }
+          : {}),
       },
     });
     createdPosts.push(post);
@@ -81,7 +106,12 @@ export async function GET(req: NextRequest) {
         businessId,
       },
     },
-    include: { socialAccount: true },
+    include: {
+      socialAccount: true,
+      mediaItems: {
+        orderBy: { order: "asc" },
+      },
+    },
     orderBy: { scheduledAt: "asc" },
   });
 
