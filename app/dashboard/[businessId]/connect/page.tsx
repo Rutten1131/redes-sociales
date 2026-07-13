@@ -94,7 +94,9 @@ export default function ConnectPage() {
           {accounts.map((acc) => {
             const meta = PLATFORM_META[acc.platform];
             const expiringSoon =
-              acc.expiresAt && new Date(acc.expiresAt).getTime() - nowMs < 7 * 24 * 60 * 60 * 1000;
+              acc.platform !== "YOUTUBE" &&
+              acc.expiresAt && 
+              new Date(acc.expiresAt).getTime() - nowMs < 7 * 24 * 60 * 60 * 1000;
             return (
               <div key={acc.id} className="card p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
