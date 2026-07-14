@@ -162,6 +162,7 @@ async function publishToPlatform(
         authorUrn: `urn:li:person:${account.externalId}`,
         text: post!.caption ?? "",
         imageUrl: !isVideo ? post!.mediaUrl : undefined,
+        videoUrl: isVideo ? post!.mediaUrl : undefined,
       });
       return res.id;
     }

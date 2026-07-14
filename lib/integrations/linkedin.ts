@@ -60,12 +60,41 @@ export async function publishLinkedInPost(params: {
   authorUrn: string; // "urn:li:person:XXXX"
   text: string;
   imageUrl?: string;
+  videoUrl?: string;
 }) {
-  const { accessToken, authorUrn, text, imageUrl } = params;
+  const { accessToken, authorUrn, text, imageUrl, videoUrl } = params;
 
   let content: Record<string, unknown> | undefined;
 
-  if (imageUrl) {
+  if (videoUrl) {
+    // Registrar la subida de video
+    const registerRes = await fetch(`${REST_URL}/videos?action=initializeUpload`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "LinkedIn-Version": LINKEDIN_VERSION,
+        "X-Restli-Protocol-Version": "2.0.0",
+      },
+      body: JSON.stringify({ initializeUploadRequest: { owner: authorUrn } }),
+    });
+    if (!registerRes.ok) throw new Error(`Error registrando video LinkedIn: ${await registerRes.text()}`);
+    const registerData = await registerRes.json();
+    const uploadInstructions = registerData.value.uploadInstructions;
+    if (!uploadInstructions || uploadInstructions.length === 0) {
+      throw new Error("No se recibieron instrucciones de subida de video de LinkedIn.");
+    }
+    const uploadUrl = uploadInstructions[0].uploadUrl as string;
+    const videoUrn = registerData.value.video as string;
+
+    // Descargar el video y subirlo
+    const videoRes = await fetch(videoUrl);
+    const videoBuffer = Buffer.from(await videoRes.arrayBuffer());
+    const uploadRes = await fetch(uploadUrl, { method: "PUT", body: videoBuffer });
+    if (!uploadRes.ok) throw new Error("Error subiendo el video a LinkedIn.");
+
+    content = { media: { title: "", id: videoUrn } };
+  } else if (imageUrl) {
     // Registrar la subida de imagen
     const registerRes = await fetch(`${REST_URL}/images?action=initializeUpload`, {
       method: "POST",

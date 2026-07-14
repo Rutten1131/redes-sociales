@@ -116,6 +116,7 @@ export async function publishFacebookPost(params: {
       access_token: pageAccessToken,
       file_url: videoUrl,
       description: message ?? "",
+      published: "true", // Asegurar que aparezca en el feed
       ...(isReel ? { video_type: "reels" } : {}),
     });
     const res = await fetch(`${GRAPH_URL}/${pageId}/videos`, {
