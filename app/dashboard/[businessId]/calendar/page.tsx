@@ -98,6 +98,7 @@ export default function CalendarPage() {
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
   const [posts, setPosts] = useState<ScheduledPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   // Calendar view states
   const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
@@ -153,6 +154,7 @@ export default function CalendarPage() {
   }
 
   useEffect(() => {
+    setMounted(true);
     loadData();
   }, [businessId]);
 
@@ -469,6 +471,14 @@ export default function CalendarPage() {
     : mediaUrl
       ? [{ url: mediaUrl, type: (mediaFile?.type.startsWith("video") || mediaUrl.endsWith(".mp4") || mediaUrl.endsWith(".mov") ? "VIDEO" as const : "IMAGE" as const) }]
       : [];
+
+  if (!mounted) {
+    return (
+      <div className="max-w-6xl mx-auto flex items-center justify-center py-24">
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto">
