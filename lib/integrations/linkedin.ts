@@ -142,3 +142,87 @@ export async function publishLinkedInPost(params: {
   if (!res.ok) throw new Error(`Error publicando en LinkedIn: ${await res.text()}`);
   return { id: res.headers.get("x-restli-id") ?? "unknown" };
 }
+
+export async function publishLinkedInVideo(params: {
+  accessToken: string;
+  authorUrn: string;
+  text: string;
+  videoUrl: string;
+}) {
+  const { accessToken, authorUrn, text, videoUrl } = params;
+
+  // Paso 1: descargar el video para conocer su tamaño exacto en bytes
+  const videoRes = await fetch(videoUrl);
+  if (!videoRes.ok) throw new Error("No se pudo descargar el video desde mediaUrl.");
+  const videoBuffer = Buffer.from(await videoRes.arrayBuffer());
+
+  // Paso 2: registrar la subida, indicando el tamaño (obligatorio para video)
+  const registerRes = await fetch(`${REST_URL}/videos?action=initializeUpload`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "LinkedIn-Version": LINKEDIN_VERSION,
+      "X-Restli-Protocol-Version": "2.0.0",
+    },
+    body: JSON.stringify({
+      initializeUploadRequest: {
+        owner: authorUrn,
+        fileSizeBytes: videoBuffer.length,
+        uploadCaptions: false,
+        uploadThumbnail: false,
+      },
+    }),
+  });
+  if (!registerRes.ok) throw new Error(`Error registrando video LinkedIn: ${await registerRes.text()}`);
+  const registerData = await registerRes.json();
+  const videoUrn = registerData.value.video as string;
+  const uploadInstructions = registerData.value.uploadInstructions as { uploadUrl: string }[];
+
+  // Paso 3: subir el video
+  const uploadedPartIds: string[] = [];
+  for (const instruction of uploadInstructions) {
+    const uploadRes = await fetch(instruction.uploadUrl, { method: "PUT", body: videoBuffer });
+    if (!uploadRes.ok) throw new Error("Error subiendo el video a LinkedIn.");
+    const etag = uploadRes.headers.get("etag");
+    if (etag) uploadedPartIds.push(etag);
+  }
+
+  // Paso 4: finalizar la subida
+  const finalizeRes = await fetch(`${REST_URL}/videos?action=finalizeUpload`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "LinkedIn-Version": LINKEDIN_VERSION,
+      "X-Restli-Protocol-Version": "2.0.0",
+    },
+    body: JSON.stringify({
+      finalizeUploadRequest: { video: videoUrn, uploadToken: "", uploadedPartIds },
+    }),
+  });
+  if (!finalizeRes.ok) throw new Error(`Error finalizando video LinkedIn: ${await finalizeRes.text()}`);
+
+  // Paso 5: crear el post con el video adjunto
+  const postBody = {
+    author: authorUrn,
+    commentary: text,
+    visibility: "PUBLIC",
+    distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] },
+    lifecycleState: "PUBLISHED",
+    content: { media: { title: "", id: videoUrn } },
+  };
+  const postRes = await fetch(`${REST_URL}/posts`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "LinkedIn-Version": LINKEDIN_VERSION,
+      "X-Restli-Protocol-Version": "2.0.0",
+    },
+    body: JSON.stringify(postBody),
+  });
+  if (!postRes.ok) throw new Error(`Error publicando video en LinkedIn: ${await postRes.text()}`);
+  return { id: postRes.headers.get("x-restli-id") ?? "unknown" };
+}
+

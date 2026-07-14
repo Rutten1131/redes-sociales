@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { decryptToken, encryptToken } from "@/lib/crypto";
 import { publishFacebookPost, publishInstagramMedia, publishFacebookCarousel, publishInstagramCarousel } from "@/lib/integrations/meta";
 import { refreshYoutubeToken, uploadYoutubeVideo } from "@/lib/integrations/youtube";
-import { publishLinkedInPost } from "@/lib/integrations/linkedin";
+import { publishLinkedInPost, publishLinkedInVideo } from "@/lib/integrations/linkedin";
 
 /**
  * Este endpoint debe llamarse periódicamente (cada 5 min, por ejemplo) desde:
@@ -27,10 +27,13 @@ export async function GET(req: NextRequest) {
   const results = [];
 
   for (const post of duePosts) {
-    await prisma.scheduledPost.update({
-      where: { id: post.id },
+    // Reclama el post de forma atómica: solo avanza si SIGUE en SCHEDULED.
+    // Si otra ejecución del cron ya lo tomó, count será 0 y lo saltamos.
+    const claimed = await prisma.scheduledPost.updateMany({
+      where: { id: post.id, status: "SCHEDULED" },
       data: { status: "PUBLISHING" },
     });
+    if (claimed.count === 0) continue; // ya lo estaba procesando otra ejecución
 
     try {
       const externalId = await publishToPlatform(post);
@@ -157,13 +160,20 @@ async function publishToPlatform(
 
     case "LINKEDIN": {
       const accessToken = decryptToken(account.accessToken);
-      const res = await publishLinkedInPost({
-        accessToken,
-        authorUrn: `urn:li:person:${account.externalId}`,
-        text: post!.caption ?? "",
-        imageUrl: !isVideo ? post!.mediaUrl : undefined,
-        videoUrl: isVideo ? post!.mediaUrl : undefined,
-      });
+      const isPostVideo = post!.type === "VIDEO" || post!.type === "REEL" || post!.type === "SHORT" || isVideo;
+      const res = isPostVideo
+        ? await publishLinkedInVideo({
+            accessToken,
+            authorUrn: `urn:li:person:${account.externalId}`,
+            text: post!.caption ?? "",
+            videoUrl: post!.mediaUrl,
+          })
+        : await publishLinkedInPost({
+            accessToken,
+            authorUrn: `urn:li:person:${account.externalId}`,
+            text: post!.caption ?? "",
+            imageUrl: post!.mediaUrl,
+          });
       return res.id;
     }
 
