@@ -207,10 +207,12 @@ export async function publishInstagramMedia(params: {
 }) {
   const containerId = await createIgContainer(params);
 
-  // Videos y Reels necesitan tiempo de procesamiento antes de publicarse
-  if (params.mediaType !== "IMAGE") {
-    await waitUntilContainerReady(containerId, params.accessToken);
-  }
+  // Siempre esperar a que el contenedor esté listo antes de publicar.
+  // Aunque las imágenes son más rápidas que los videos, Instagram también
+  // las procesa de forma asíncrona. Publicar sin esperar provoca el error
+  // "Media ID is not available" (code 9007, subcode 2207027), especialmente
+  // cuando se publica en Facebook e Instagram al mismo tiempo.
+  await waitUntilContainerReady(containerId, params.accessToken);
 
   const body = new URLSearchParams({
     access_token: params.accessToken,
