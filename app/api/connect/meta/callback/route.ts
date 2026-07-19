@@ -79,8 +79,12 @@ export async function GET(req: NextRequest) {
         },
       });
 
-      // Suscribir la página a webhooks (messages + feed) automáticamente
-      await subscribePageToWebhook(page.pageId, page.pageAccessToken);
+      // Suscribir la página al webhook para recibir DMs y comentarios en tiempo real
+      try {
+        await subscribePageToWebhook(page.pageId, page.pageAccessToken);
+      } catch (err) {
+        console.error("No se pudo suscribir la página al webhook:", err);
+      }
 
       if (page.instagramBusinessAccountId) {
         await prisma.socialAccount.upsert({

@@ -332,7 +332,7 @@ export async function publishInstagramCarousel(params: {
 export async function subscribePageToWebhook(pageId: string, pageAccessToken: string) {
   const body = new URLSearchParams({
     access_token: pageAccessToken,
-    subscribed_fields: "messages,feed",
+    subscribed_fields: "feed,messages,messaging_postbacks",
   });
   const res = await fetch(`${GRAPH_URL}/${pageId}/subscribed_apps`, {
     method: "POST",
@@ -341,9 +341,9 @@ export async function subscribePageToWebhook(pageId: string, pageAccessToken: st
   if (!res.ok) {
     const errText = await res.text();
     console.error(`Error suscribiendo página ${pageId} a webhooks:`, errText);
-    // No lanzar error — la suscripción es "best-effort" durante el callback
+    throw new Error(`Error suscribiendo página al webhook: ${errText}`);
   }
-  return res.ok;
+  return res.json();
 }
 
 // ---------- Responder DMs y Comentarios ----------
