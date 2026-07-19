@@ -5,6 +5,7 @@ import {
   exchangeCodeForToken,
   getLongLivedToken,
   discoverPages,
+  subscribePageToWebhook,
 } from "@/lib/integrations/meta";
 
 export async function GET(req: NextRequest) {
@@ -77,6 +78,9 @@ export async function GET(req: NextRequest) {
           accessToken: encryptToken(page.pageAccessToken),
         },
       });
+
+      // Suscribir la página a webhooks (messages + feed) automáticamente
+      await subscribePageToWebhook(page.pageId, page.pageAccessToken);
 
       if (page.instagramBusinessAccountId) {
         await prisma.socialAccount.upsert({

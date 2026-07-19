@@ -76,8 +76,29 @@ model SocialAccount {
   updatedAt      DateTime @updatedAt
 
   scheduledPosts ScheduledPost[]
+  inboxItems     InboxItem[]
 
   @@unique([businessId, platform, externalId])
+}
+
+model InboxItem {
+  id              String        @id @default(cuid())
+  socialAccountId String
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  platform        Platform
+  type            String        // "DM" o "COMMENT"
+  externalId      String        // ID del mensaje o comentario en la plataforma
+  parentId        String?       // Para hilos de mensajes o comentarios raíz
+  fromName        String?
+  fromExternalId  String?
+  content         String        @db.Text
+  status          String        @default("PENDING") // PENDING, ANSWERED, IGNORED
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([socialAccountId, externalId])
 }
 
 model ScheduledPost {

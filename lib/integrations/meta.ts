@@ -22,8 +22,12 @@ export function getMetaAuthUrl(state: string) {
       "pages_show_list",
       "pages_read_engagement",
       "pages_manage_posts",
+      "pages_messaging",
+      "pages_manage_engagement",
       "instagram_basic",
       "instagram_content_publish",
+      "instagram_manage_messages",
+      "instagram_manage_comments",
       "business_management",
     ].join(","),
     response_type: "code",
@@ -321,4 +325,79 @@ export async function publishInstagramCarousel(params: {
   const publishRes = await fetch(`${GRAPH_URL}/${igUserId}/media_publish`, { method: "POST", body: publishBody });
   if (!publishRes.ok) throw new Error(`Error publicando carrusel en Instagram: ${await publishRes.text()}`);
   return publishRes.json();
+}
+
+// ---------- Webhooks: suscribir página a eventos ----------
+
+export async function subscribePageToWebhook(pageId: string, pageAccessToken: string) {
+  const body = new URLSearchParams({
+    access_token: pageAccessToken,
+    subscribed_fields: "messages,feed",
+  });
+  const res = await fetch(`${GRAPH_URL}/${pageId}/subscribed_apps`, {
+    method: "POST",
+    body,
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Error suscribiendo página ${pageId} a webhooks:`, errText);
+    // No lanzar error — la suscripción es "best-effort" durante el callback
+  }
+  return res.ok;
+}
+
+// ---------- Responder DMs y Comentarios ----------
+
+export async function replyFacebookMessage(params: {
+  pageAccessToken: string;
+  recipientId: string;
+  message: string;
+}) {
+  const body = JSON.stringify({
+    recipient: { id: params.recipientId },
+    message: { text: params.message },
+  });
+  const res = await fetch(`${GRAPH_URL}/me/messages?access_token=${params.pageAccessToken}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+  if (!res.ok) throw new Error(`Error respondiendo DM de Facebook: ${await res.text()}`);
+  return res.json();
+}
+
+export async function replyInstagramMessage(params: {
+  pageAccessToken: string;
+  recipientId: string;
+  message: string;
+}) {
+  // Instagram DMs también se envían vía /me/messages con el Page Access Token
+  const body = JSON.stringify({
+    recipient: { id: params.recipientId },
+    message: { text: params.message },
+  });
+  const res = await fetch(`${GRAPH_URL}/me/messages?access_token=${params.pageAccessToken}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+  if (!res.ok) throw new Error(`Error respondiendo DM de Instagram: ${await res.text()}`);
+  return res.json();
+}
+
+export async function replyToComment(params: {
+  commentId: string;
+  accessToken: string;
+  message: string;
+}) {
+  const body = new URLSearchParams({
+    access_token: params.accessToken,
+    message: params.message,
+  });
+  const res = await fetch(`${GRAPH_URL}/${params.commentId}/comments`, {
+    method: "POST",
+    body,
+  });
+  if (!res.ok) throw new Error(`Error respondiendo comentario: ${await res.text()}`);
+  return res.json();
 }
