@@ -1,8 +1,8 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Política de Privacidad — Programador de publicaciones",
-  description: "Política de Privacidad y tratamiento de datos de nuestra aplicación para programar publicaciones en redes sociales.",
+  title: "Política de Privacidad — probando2",
+  description: "Política de Privacidad y tratamiento de datos de nuestra aplicación probando2 para programar publicaciones en redes sociales.",
 };
 
 export default function PrivacyPolicy() {
@@ -15,7 +15,7 @@ export default function PrivacyPolicy() {
             <span className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--instagram)" }} />
             <span className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--youtube)" }} />
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Política de Privacidad</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">Política de Privacidad de probando2</h1>
           <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
             Última actualización: 16 de julio de 2026
           </p>
@@ -27,7 +27,7 @@ export default function PrivacyPolicy() {
               1. Introducción
             </h2>
             <p>
-              Bienvenido a nuestra plataforma de programación de publicaciones (la &quot;Aplicación&quot;). Nos tomamos muy en serio la privacidad y la protección de sus datos. Esta Política de Privacidad describe cómo recopilamos, utilizamos, almacenamos y compartimos su información cuando utiliza nuestros servicios para conectar y publicar en sus redes sociales, incluyendo Facebook, Instagram y YouTube.
+              Bienvenido a nuestra plataforma de programación de publicaciones **probando2** (la &quot;Aplicación&quot;). Nos tomamos muy en serio la privacidad y la protección de sus datos. Esta Política de Privacidad describe cómo recopilamos, utilizamos, almacenamos y compartimos su información cuando utiliza nuestros servicios para conectar y publicar en sus redes sociales, incluyendo Facebook, Instagram y YouTube.
             </p>
           </section>
 
@@ -144,7 +144,7 @@ export default function PrivacyPolicy() {
         </div>
 
         <div className="mt-8 pt-6 border-t flex justify-between items-center text-xs" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
-          <p>© {new Date().getFullYear()} Programador de publicaciones. Todos los derechos reservados.</p>
+          <p>© {new Date().getFullYear()} probando2. Todos los derechos reservados.</p>
           <Link href="/login" className="hover:underline text-white font-medium">
             Volver a inicio
           </Link>
