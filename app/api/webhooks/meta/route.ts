@@ -65,11 +65,23 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // --- Comentarios (Facebook feed changes) ---
+    // --- Comentarios (Facebook feed changes e Instagram comments) ---
     if (entry.changes) {
       for (const change of entry.changes) {
+        // Comentarios de Facebook (llegan como feed changes)
         if (change.field === "feed" && change.value?.item === "comment") {
           await handleIncomingComment(entry.id, change.value);
+        }
+        // Comentarios de Instagram (llegan como campo 'comments')
+        if (change.field === "comments" && change.value) {
+          await handleInstagramComment(entry.id, change.value);
+        }
+        // Menciones de Instagram (llegan como campo 'mention')
+        if (change.field === "mention" && change.value) {
+          await handleInstagramComment(entry.id, {
+            ...change.value,
+            comment_id: change.value.comment_id ?? change.value.media_id,
+          });
         }
       }
     }
@@ -179,5 +191,55 @@ async function handleIncomingComment(
     });
   } catch (err) {
     console.error("Error guardando comentario entrante:", err);
+  }
+}
+
+async function handleInstagramComment(
+  igAccountId: string,
+  value: {
+    comment_id?: string;
+    from?: { id: string; username?: string; name?: string };
+    text?: string;
+    media_id?: string;
+    parent_id?: string;
+  }
+) {
+  if (!value.comment_id || !value.from?.id) return;
+
+  // Ignorar comentarios hechos por la propia cuenta de IG
+  if (value.from.id === igAccountId) return;
+
+  const socialAccount = await prisma.socialAccount.findFirst({
+    where: { externalId: igAccountId, platform: "INSTAGRAM" },
+  });
+
+  if (!socialAccount) {
+    console.warn(`No se encontró cuenta de Instagram con externalId: ${igAccountId}`);
+    return;
+  }
+
+  try {
+    await prisma.inboxItem.upsert({
+      where: {
+        socialAccountId_externalId: {
+          socialAccountId: socialAccount.id,
+          externalId: value.comment_id,
+        },
+      },
+      create: {
+        socialAccountId: socialAccount.id,
+        platform: "INSTAGRAM",
+        type: "COMMENT",
+        externalId: value.comment_id,
+        parentId: value.parent_id ?? value.media_id ?? null,
+        fromExternalId: value.from.id,
+        fromName: value.from.username ?? value.from.name ?? null,
+        content: value.text ?? "",
+        status: "PENDING",
+      },
+      update: {},
+    });
+  } catch (err) {
+    console.error("Error guardando comentario de Instagram:", err);
   }
 }

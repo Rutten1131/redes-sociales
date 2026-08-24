@@ -331,7 +331,7 @@ export async function publishInstagramCarousel(params: {
 export async function subscribePageToWebhook(pageId: string, pageAccessToken: string) {
   const body = new URLSearchParams({
     access_token: pageAccessToken,
-    subscribed_fields: "feed,messages,messaging_postbacks",
+    subscribed_fields: "feed,messages,messaging_postbacks,mention,messaging_handovers",
   });
   const res = await fetch(`${GRAPH_URL}/${pageId}/subscribed_apps`, {
     method: "POST",
