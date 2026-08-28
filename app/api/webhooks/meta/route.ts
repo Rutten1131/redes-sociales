@@ -49,12 +49,14 @@ export async function POST(req: NextRequest) {
   const signature = req.headers.get("x-hub-signature-256");
   const rawBody = await req.text();
 
+  console.log("📨 Webhook POST recibido con headers:", req.headers.get("x-hub-signature-256"));
   if (!verifyMetaSignature(rawBody, signature)) {
-    console.warn("⚠️ Webhook recibido con firma inválida");
+    console.warn("⚠️ Webhook recibido con firma inválida o META_APP_SECRET no coincide");
     return new Response("Invalid signature", { status: 401 });
   }
 
   const payload = JSON.parse(rawBody);
+  console.log("📦 Webhook payload:", JSON.stringify(payload));
 
   // Meta envía los eventos en payload.entry[]
   for (const entry of payload.entry ?? []) {
