@@ -30,6 +30,7 @@ export function getMetaAuthUrl(state: string) {
       "instagram_manage_messages",
       "business_management",
     ].join(","),
+    auth_type: "rerequest",
     response_type: "code",
   });
   return `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth?${params.toString()}`;
@@ -340,10 +341,12 @@ export async function subscribePageToWebhook(pageId: string, pageAccessToken: st
   });
   if (!res.ok) {
     const errText = await res.text();
-    console.error(`Error suscribiendo página ${pageId} a webhooks:`, errText);
+    console.error(`❌ Error suscribiendo página ${pageId} a webhooks:`, errText);
     throw new Error(`Error suscribiendo página al webhook: ${errText}`);
   }
-  return res.json();
+  const data = await res.json();
+  console.log(`✅ Suscripción exitosa para página ${pageId}:`, JSON.stringify(data));
+  return data;
 }
 
 // ---------- Responder DMs y Comentarios ----------
