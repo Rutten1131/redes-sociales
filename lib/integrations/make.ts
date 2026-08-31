@@ -127,11 +127,13 @@ export function formatPayloadForMake(params: {
     }
   }
 
+  const finalMediaUrl = mediaUrl || (mediaItems && mediaItems.length > 0 ? mediaItems[0].url : null);
+
   return {
     version: '2.0',
     post_id: postId,
     text: caption || '',
-    media_url: mediaUrl || (mediaItems && mediaItems.length > 0 ? mediaItems[0].url : null),
+    media_url: finalMediaUrl,
     media_urls,
     photo_urls,
     video_urls,
@@ -139,7 +141,7 @@ export function formatPayloadForMake(params: {
     facebook_photos,
     linkedin_photos,
     post_media_category,
-    link_para_post: null,
+    link_para_post: finalMediaUrl || '',
     platforms: mappedPlatforms,
     metadata: {
       original_type: type,
