@@ -1,0 +1,407 @@
+{
+  "name": "Automatización de RRSS Objetivo (Simplificado)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": 1991935,
+        "maxResults": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 1800
+        },
+        "restore": {
+          "parameters": {
+            "hook": {
+              "data": {
+                "editable": "true"
+              },
+              "label": "RRSS-PRO-KEY"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "hook",
+            "type": "hook:gateway-webhook",
+            "label": "Webhook",
+            "required": true
+          },
+          {
+            "name": "maxResults",
+            "type": "number",
+            "label": "Maximum number of results"
+          }
+        ],
+        "advanced": true
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "mapper": null,
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 900
+        }
+      },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 10,
+              "module": "facebook-pages:CreatePostWithPhotos",
+              "version": 6,
+              "parameters": {
+                "__IMTCONN__": 7785007
+              },
+              "filter": {
+                "name": "Facebook Imagen",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.platforms}}",
+                      "b": "facebook",
+                      "o": "array:contain"
+                    },
+                    {
+                      "a": "{{1.media_urls}}",
+                      "b": ".mp4",
+                      "o": "text:notcontain:ci"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "page_id": "117198264668884",
+                "message": "{{1.text}}",
+                "photos": [
+                  {
+                    "url": "{{1.media_url}}",
+                    "type": "url",
+                    "caption": "{{1.text}}"
+                  }
+                ]
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 300
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 20,
+              "module": "instagram-business:CreatePostPhoto",
+              "version": 2,
+              "parameters": {
+                "__IMTCONN__": 7785007
+              },
+              "filter": {
+                "name": "Instagram Imagen",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.platforms}}",
+                      "b": "instagram",
+                      "o": "array:contain"
+                    },
+                    {
+                      "a": "{{1.media_urls}}",
+                      "b": ".mp4",
+                      "o": "text:notcontain"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "accountId": "17841458526567614",
+                "caption": "{{1.text}}",
+                "image_url": "{{1.media_url}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 600
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 30,
+              "module": "linkedin:ShareImage",
+              "version": 2,
+              "parameters": {
+                "__IMTCONN__": 7792828
+              },
+              "filter": {
+                "name": "LinkedIn Imagen",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.platforms}}",
+                      "b": "linkedin",
+                      "o": "array:contain"
+                    },
+                    {
+                      "a": "{{1.media_url}}",
+                      "b": ".mp4",
+                      "o": "text:notcontain"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "{{1.media_url}}",
+                "content": "{{1.text}}",
+                "altText": "{{1.text}}",
+                "title": "Image",
+                "visibility": "PUBLIC",
+                "feedDistribution": "MAIN_FEED",
+                "isReshareDisabledByAuthor": false
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 900
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 40,
+              "module": "http:MakeRequest",
+              "version": 3,
+              "parameters": {
+                "handleErrors": false
+              },
+              "filter": {
+                "name": "Facebook Video",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.platforms}}",
+                      "b": "facebook",
+                      "o": "array:contain"
+                    },
+                    {
+                      "a": "{{1.media_url}}",
+                      "b": ".mp4",
+                      "o": "text:contain"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "{{1.media_url}}",
+                "method": "get",
+                "shareCookies": false,
+                "parseResponse": true,
+                "allowRedirects": true,
+                "stopOnHttpError": true,
+                "requestCompressedContent": true
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 1200
+                }
+              }
+            },
+            {
+              "id": 41,
+              "module": "facebook-pages:UploadVideo",
+              "version": 6,
+              "parameters": {
+                "__IMTCONN__": 7785007
+              },
+              "mapper": {
+                "data": "{{40.data}}",
+                "type": "data",
+                "page_id": "117198264668884",
+                "fileName": "video.mp4",
+                "description": "{{1.text}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": 1200
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 50,
+              "module": "instagram-business:CreateAReelPost",
+              "version": 2,
+              "parameters": {
+                "__IMTCONN__": 7785007
+              },
+              "filter": {
+                "name": "Instagram Reel",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.platforms}}",
+                      "b": "instagram",
+                      "o": "array:contain"
+                    },
+                    {
+                      "a": "{{1.media_url}}",
+                      "b": ".mp4",
+                      "o": "text:contain"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "accountId": "17841458526567614",
+                "caption": "{{1.text}}",
+                "video_url": "{{1.media_url}}",
+                "share_to_feed": true
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 1500
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 60,
+              "module": "linkedin:createVideoPost",
+              "version": 2,
+              "parameters": {
+                "__IMTCONN__": 7792828
+              },
+              "filter": {
+                "name": "LinkedIn Video",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.platforms}}",
+                      "b": "linkedin",
+                      "o": "array:contain"
+                    },
+                    {
+                      "a": "{{1.media_url}}",
+                      "b": ".mp4",
+                      "o": "text:contain"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "{{1.media_url}}",
+                "title": "{{1.text}}",
+                "method": "link",
+                "content": "{{1.text}}",
+                "visibility": "PUBLIC",
+                "feedDistribution": "MAIN_FEED",
+                "isReshareDisabledByAuthor": false
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 1800
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 70,
+              "module": "http:MakeRequest",
+              "version": 3,
+              "parameters": {
+                "handleErrors": false
+              },
+              "filter": {
+                "name": "YouTube Video",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.platforms}}",
+                      "b": "youtube",
+                      "o": "array:contain"
+                    },
+                    {
+                      "a": "{{1.media_url}}",
+                      "b": ".mp4",
+                      "o": "text:contain"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "{{1.media_url}}",
+                "method": "get",
+                "shareCookies": false,
+                "parseResponse": true,
+                "allowRedirects": true,
+                "stopOnHttpError": true,
+                "requestCompressedContent": true
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 2100
+                }
+              }
+            },
+            {
+              "id": 71,
+              "module": "youtube:uploadVideo",
+              "version": 1,
+              "parameters": {
+                "__IMTCONN__": 8608782
+              },
+              "mapper": {
+                "data": "{{70.data}}",
+                "title": "{{1.text}}",
+                "fileName": "video.mp4",
+                "categoryId": "22",
+                "description": "{{1.text}}",
+                "privacyStatus": "public",
+                "containsSyntheticMedia": false,
+                "selfDeclaredMadeForKids": false
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": 2100
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

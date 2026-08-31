@@ -141,7 +141,7 @@ export function formatPayloadForMake(params: {
     facebook_photos,
     linkedin_photos,
     post_media_category,
-    link_para_post: finalMediaUrl || '',
+    link_para_post: null,
     platforms: mappedPlatforms,
     metadata: {
       original_type: type,
