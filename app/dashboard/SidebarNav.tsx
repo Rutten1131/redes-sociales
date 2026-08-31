@@ -48,6 +48,22 @@ export default function SidebarNav() {
             </svg>
             Bandeja de entrada
           </Link>
+          <Link
+            href={`/dashboard/${businessId}/ai-settings`}
+            className={`px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+              pathname.includes("/ai-settings") ? "bg-white/10" : "hover:bg-white/5"
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400">
+              <path d="M12 8V4H8"/>
+              <rect width="16" height="12" x="4" y="8" rx="2"/>
+              <path d="M2 14h2"/>
+              <path d="M20 14h2"/>
+              <path d="M15 13v2"/>
+              <path d="M9 13v2"/>
+            </svg>
+            Auto-Respuesta IA
+          </Link>
           <div className="h-px my-2" style={{ background: "var(--border)" }} />
         </>
       ) : null}

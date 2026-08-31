@@ -24,6 +24,8 @@ interface InboxItem {
   fromExternalId: string | null;
   content: string;
   status: "PENDING" | "ANSWERED" | "IGNORED";
+  aiSuggestedReply?: string | null;
+  aiReplied?: boolean;
   createdAt: string;
 }
 
@@ -56,6 +58,7 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(true);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
+  const [generatingAi, setGeneratingAi] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -146,6 +149,33 @@ export default function InboxPage() {
       }
     } catch (err: any) {
       setError(err.message);
+    }
+  };
+
+  const handleGenerateAiReply = async () => {
+    if (!selectedItem) return;
+    setGeneratingAi(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/ai/generate-reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: selectedItem.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Error generando respuesta de IA");
+      }
+      const data = await res.json();
+      if (data.reply) {
+        setReplyText(data.reply);
+        setSelectedItem((prev) => (prev ? { ...prev, aiSuggestedReply: data.reply } : null));
+        setSuccessMsg("¡Sugerencia generada con Groq Llama 3.3 70B!");
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setGeneratingAi(false);
     }
   };
 
@@ -420,6 +450,23 @@ export default function InboxPage() {
                       >
                         {item.type === "DM" ? "DM" : "Comentario"}
                       </span>
+                      {item.aiReplied && (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            padding: "2px 6px",
+                            borderRadius: 6,
+                            background: "rgba(245,158,11,0.15)",
+                            color: "#f59e0b",
+                            fontWeight: 700,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 2,
+                          }}
+                        >
+                          🤖 IA
+                        </span>
+                      )}
                     </div>
                     <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
                       {formatDate(item.createdAt)}
@@ -667,17 +714,75 @@ export default function InboxPage() {
                 )}
               </div>
 
-              {/* Reply box */}
+                {/* Reply box */}
               {selectedItem.status !== "IGNORED" && (
                 <div
                   style={{
                     padding: "16px 20px",
                     borderTop: "1px solid var(--border)",
                     display: "flex",
-                    gap: 12,
-                    alignItems: "flex-end",
+                    flexDirection: "column",
+                    gap: 10,
                   }}
                 >
+                  {/* AI Suggestion Bar */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: "var(--text-muted)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <span>🤖</span> Motor IA: <strong>Groq Llama 3.3 70B</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleGenerateAiReply}
+                      disabled={generatingAi}
+                      style={{
+                        padding: "5px 12px",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        borderRadius: 8,
+                        background: "rgba(245, 158, 11, 0.1)",
+                        color: "#f59e0b",
+                        border: "1px solid rgba(245, 158, 11, 0.3)",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
+                        transition: "all 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.background = "rgba(245, 158, 11, 0.2)";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.background = "rgba(245, 158, 11, 0.1)";
+                      }}
+                    >
+                      {generatingAi ? "✨ Generando con Groq..." : "✨ Sugerir respuesta con IA"}
+                    </button>
+                  </div>
+
+                  {/* Input and Send button */}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 12,
+                      alignItems: "flex-end",
+                    }}
+                  >
                   <textarea
                     className="input"
                     value={replyText}
@@ -702,52 +807,53 @@ export default function InboxPage() {
                       lineHeight: 1.5,
                     }}
                   />
-                  <button
-                    className="btn-primary"
-                    onClick={handleReply}
-                    disabled={sending || !replyText.trim()}
-                    style={{
-                      padding: "10px 20px",
-                      fontSize: 13,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {sending ? (
-                      <>
-                        <span
-                          className="pulse-dot"
-                          style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: "50%",
-                            background: "white",
-                            display: "inline-block",
-                          }}
-                        />
-                        Enviando...
-                      </>
-                    ) : (
-                      <>
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <line x1="22" y1="2" x2="11" y2="13" />
-                          <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                        </svg>
-                        Enviar
-                      </>
-                    )}
-                  </button>
+                    <button
+                      className="btn-primary"
+                      onClick={handleReply}
+                      disabled={sending || !replyText.trim()}
+                      style={{
+                        padding: "10px 20px",
+                        fontSize: 13,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {sending ? (
+                        <>
+                          <span
+                            className="pulse-dot"
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: "50%",
+                              background: "white",
+                              display: "inline-block",
+                            }}
+                          />
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <line x1="22" y1="2" x2="11" y2="13" />
+                            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                          </svg>
+                          Enviar
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               )}
             </>

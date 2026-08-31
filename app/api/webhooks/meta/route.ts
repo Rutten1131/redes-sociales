@@ -93,6 +93,8 @@ export async function POST(req: NextRequest) {
   return new Response("OK", { status: 200 });
 }
 
+import { processInboxItemWithAi } from "@/lib/ai/auto-responder";
+
 // ---------- Handlers internos ----------
 
 async function handleIncomingMessage(
@@ -107,10 +109,8 @@ async function handleIncomingMessage(
   if (!msg.message?.mid || !msg.sender?.id) return;
 
   // Ignorar mensajes enviados por nosotros mismos (echo)
-  // En la API de Meta, si el sender.id === page id, es un echo
   if (msg.sender.id === pageOrIgId) return;
 
-  // Buscar la cuenta social por externalId (puede ser FB Page ID o IG Account ID)
   const socialAccount = await prisma.socialAccount.findFirst({
     where: { externalId: pageOrIgId },
   });
@@ -121,7 +121,7 @@ async function handleIncomingMessage(
   }
 
   try {
-    await prisma.inboxItem.upsert({
+    const item = await prisma.inboxItem.upsert({
       where: {
         socialAccountId_externalId: {
           socialAccountId: socialAccount.id,
@@ -134,12 +134,19 @@ async function handleIncomingMessage(
         type: "DM",
         externalId: msg.message.mid,
         fromExternalId: msg.sender.id,
-        fromName: null, // Meta no envía el nombre en el webhook; se puede obtener después
+        fromName: null,
         content: msg.message.text ?? "[media]",
         status: "PENDING",
       },
-      update: {}, // Si ya existe, no actualizar
+      update: {},
     });
+
+    // Disparar procesamiento con IA en segundo plano
+    if (item && item.status === "PENDING") {
+      processInboxItemWithAi(item.id).catch((aiErr) => {
+        console.error(`[Webhook AI DM Error for ${item.id}]:`, aiErr);
+      });
+    }
   } catch (err) {
     console.error("Error guardando DM entrante:", err);
   }
@@ -171,7 +178,7 @@ async function handleIncomingComment(
   }
 
   try {
-    await prisma.inboxItem.upsert({
+    const item = await prisma.inboxItem.upsert({
       where: {
         socialAccountId_externalId: {
           socialAccountId: socialAccount.id,
@@ -191,6 +198,13 @@ async function handleIncomingComment(
       },
       update: {},
     });
+
+    // Disparar procesamiento con IA en segundo plano
+    if (item && item.status === "PENDING") {
+      processInboxItemWithAi(item.id).catch((aiErr) => {
+        console.error(`[Webhook AI Comment Error for ${item.id}]:`, aiErr);
+      });
+    }
   } catch (err) {
     console.error("Error guardando comentario entrante:", err);
   }
@@ -221,7 +235,7 @@ async function handleInstagramComment(
   }
 
   try {
-    await prisma.inboxItem.upsert({
+    const item = await prisma.inboxItem.upsert({
       where: {
         socialAccountId_externalId: {
           socialAccountId: socialAccount.id,
@@ -241,7 +255,15 @@ async function handleInstagramComment(
       },
       update: {},
     });
+
+    // Disparar procesamiento con IA en segundo plano
+    if (item && item.status === "PENDING") {
+      processInboxItemWithAi(item.id).catch((aiErr) => {
+        console.error(`[Webhook AI IG Comment Error for ${item.id}]:`, aiErr);
+      });
+    }
   } catch (err) {
     console.error("Error guardando comentario de Instagram:", err);
   }
 }
+

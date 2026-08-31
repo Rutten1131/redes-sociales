@@ -4,6 +4,7 @@ import { decryptToken, encryptToken } from "@/lib/crypto";
 import { publishFacebookPost, publishInstagramMedia, publishFacebookCarousel, publishInstagramCarousel } from "@/lib/integrations/meta";
 import { refreshYoutubeToken, uploadYoutubeVideo } from "@/lib/integrations/youtube";
 import { publishLinkedInPost, publishLinkedInVideo } from "@/lib/integrations/linkedin";
+import { formatPayloadForMake, sendToMakeWebhook } from "@/lib/integrations/make";
 
 /**
  * Este endpoint debe llamarse periódicamente (cada 5 min, por ejemplo) desde:
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   const duePosts = await prisma.scheduledPost.findMany({
     where: { status: "SCHEDULED", scheduledAt: { lte: new Date() } },
-    include: { socialAccount: true },
+    include: { socialAccount: true, mediaItems: { orderBy: { order: "asc" } } },
     take: 20, // procesa en lotes para no saturar
   });
 
@@ -58,8 +59,26 @@ export async function GET(req: NextRequest) {
 async function publishToPlatform(
   post: Awaited<ReturnType<typeof prisma.scheduledPost.findFirst>> & {
     socialAccount: { accessToken: string; refreshToken: string | null; externalId: string; id: string };
+    mediaItems?: Array<{ url: string; type: "IMAGE" | "VIDEO" }>;
   }
 ): Promise<string> {
+  // Si está configurado el puente de Make.com como prioritario en .env
+  if (process.env.USE_MAKE_WEBHOOK === "true" && process.env.MAKE_WEBHOOK_URL) {
+    const makePayload = formatPayloadForMake({
+      postId: post!.id,
+      caption: post!.caption,
+      platforms: [post!.platform],
+      type: post!.type,
+      mediaUrl: post!.mediaUrl,
+      mediaItems: post!.mediaItems,
+    });
+    const makeRes = await sendToMakeWebhook(makePayload);
+    if (!makeRes.success) {
+      throw new Error(`Error en puente de Make.com: ${makeRes.error}`);
+    }
+    return `make_${post!.id}`;
+  }
+
   const account = post!.socialAccount;
   const isVideo = post!.mediaUrl.toLowerCase().match(/\.(mp4|mov|avi|mkv|webm|3gp|wmv)($|\?)/) !== null;
 

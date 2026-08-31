@@ -52,6 +52,14 @@ model Business {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   socialAccounts SocialAccount[]
+
+  // Configuración de IA para auto-respuesta
+  aiPrompt         String?  @db.Text // Instrucciones generales del negocio
+  aiDMsPrompt      String?  @db.Text // Instrucciones específicas para DMs (Atención personalizada y cierre)
+  aiCommentsPrompt String?  @db.Text // Instrucciones específicas para Comentarios (Engagement y llevar a DM)
+  aiTone           String   @default("amable_profesional") // Tono de voz de la IA
+  autoReplyDMs     Boolean  @default(false) // ¿Auto-responder DMs sin intervención?
+  autoReplyComments Boolean @default(false) // ¿Auto-responder comentarios sin intervención?
 }
 
 // Cada cuenta social conectada por un negocio
@@ -94,6 +102,10 @@ model InboxItem {
   fromExternalId  String?
   content         String        @db.Text
   status          String        @default("PENDING") // PENDING, ANSWERED, IGNORED
+
+  // Campos de IA
+  aiSuggestedReply String?      @db.Text // Respuesta sugerida por la IA (para modo asistido)
+  aiReplied        Boolean      @default(false) // ¿Fue respondido automáticamente por la IA?
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt

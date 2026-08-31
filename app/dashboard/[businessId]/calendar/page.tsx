@@ -45,6 +45,45 @@ const MONTHS = [
 
 const YEARS = [2026, 2027, 2028];
 
+const FORMAT_INFO: Record<string, { label: string; badge: string; info: string; platforms: string[]; adaptNote?: string }> = {
+  FEED_POST: {
+    label: "Post (Feed)",
+    badge: "FB • IG • LinkedIn",
+    info: "Publicación para el muro/feed principal.",
+    platforms: ["FACEBOOK", "INSTAGRAM", "LINKEDIN"],
+    adaptNote: "En Instagram requiere foto; en Facebook y LinkedIn soporta foto y texto.",
+  },
+  VIDEO_NORMAL: {
+    label: "Video normal (Horizontal / Estándar)",
+    badge: "Todas las redes",
+    info: "Video estándar de larga o media duración.",
+    platforms: ["FACEBOOK", "INSTAGRAM", "YOUTUBE", "LINKEDIN"],
+    adaptNote: "Se sube como video estándar a YouTube, LinkedIn, Facebook e Instagram.",
+  },
+  REEL: {
+    label: "Reel / Short (Vertical 9:16)",
+    badge: "FB • IG • YouTube • LinkedIn",
+    info: "Video vertical para máximo alcance y viralidad.",
+    platforms: ["FACEBOOK", "INSTAGRAM", "YOUTUBE", "LINKEDIN"],
+    adaptNote: "Se publica como Reel en Instagram/Facebook, Short en YouTube y Video en LinkedIn.",
+  },
+  STORY: {
+    label: "Historia (24 hrs)",
+    badge: "FB • IG",
+    info: "Contenido efímero vertical de 24 horas.",
+    platforms: ["FACEBOOK", "INSTAGRAM"],
+    adaptNote: "Compatible exclusivamente con Stories de Instagram y Facebook.",
+  },
+  CAROUSEL: {
+    label: "Carrusel (2 a 10 fotos/videos)",
+    badge: "FB • IG • LinkedIn",
+    info: "Secuencia deslizable de múltiples elementos.",
+    platforms: ["FACEBOOK", "INSTAGRAM", "LINKEDIN"],
+    adaptNote: "Se publica como carrusel deslizable en Instagram, Facebook y LinkedIn.",
+  },
+};
+
+
 // Component to handle rendering carousels with simple slider dots
 function CarouselPreview({ items }: { items: { url: string; type: "IMAGE" | "VIDEO" }[] }) {
   const [index, setIndex] = useState(0);
@@ -169,24 +208,8 @@ export default function CalendarPage() {
   }, [selectedAccountIds, accounts]);
 
   const getCompatibleAccounts = (type: string) => {
-    return accounts.filter(acc => {
-      if (type === "FEED_POST") {
-        return acc.platform === "FACEBOOK" || acc.platform === "INSTAGRAM" || acc.platform === "LINKEDIN";
-      }
-      if (type === "VIDEO_NORMAL") {
-        return true;
-      }
-      if (type === "REEL") {
-        return acc.platform === "FACEBOOK" || acc.platform === "INSTAGRAM" || acc.platform === "YOUTUBE";
-      }
-      if (type === "STORY") {
-        return acc.platform === "FACEBOOK" || acc.platform === "INSTAGRAM";
-      }
-      if (type === "CAROUSEL") {
-        return acc.platform === "FACEBOOK" || acc.platform === "INSTAGRAM" || acc.platform === "LINKEDIN";
-      }
-      return false;
-    });
+    const allowed = FORMAT_INFO[type]?.platforms || [];
+    return accounts.filter(acc => allowed.includes(acc.platform));
   };
 
   // Auto-check all compatible accounts when post type changes or accounts load
@@ -451,13 +474,10 @@ export default function CalendarPage() {
     setCarouselItems(carouselItems.filter((_, idx) => idx !== idxToRemove));
   };
 
-  const ALL_FORMATS = [
-    { value: "FEED_POST", label: "Post" },
-    { value: "VIDEO_NORMAL", label: "Video normal" },
-    { value: "REEL", label: "Reel" },
-    { value: "STORY", label: "Historia" },
-    { value: "CAROUSEL", label: "Carrusel" },
-  ];
+  const ALL_FORMATS = Object.entries(FORMAT_INFO).map(([value, info]) => ({
+    value,
+    label: info.label,
+  }));
 
   // Highlight selected tab in mockup preview
   const activePreviewAccount = accounts.find(
@@ -479,6 +499,8 @@ export default function CalendarPage() {
       </div>
     );
   }
+
+  const currentFormatInfo = FORMAT_INFO[postType] || FORMAT_INFO.FEED_POST;
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -517,39 +539,16 @@ export default function CalendarPage() {
         /* PROGRAMMER FORM & PREVIEW PANEL */
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
           {/* Form Side */}
-          <form onSubmit={handleSubmit} className="lg:col-span-7 card p-6 space-y-4">
-            <h2 className="text-lg font-semibold">Programar para el {selectedDate.toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" })}</h2>
-            
-            {/* Accounts Select Checkboxes */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-300 block">Publicar en:</label>
-                <span className="text-[10px] text-gray-500 italic">Solo cuentas compatibles con "{ALL_FORMATS.find(f => f.value === postType)?.label}"</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {getCompatibleAccounts(postType).map(acc => {
-                  const isChecked = selectedAccountIds.includes(acc.id);
-                  return (
-                    <button
-                      key={acc.id}
-                      type="button"
-                      onClick={() => toggleAccountSelection(acc.id)}
-                      className={`p-3 rounded-lg border text-left flex flex-col justify-between transition-all ${
-                        isChecked
-                          ? "border-blue-500 bg-blue-500/10 text-white"
-                          : "border-white/10 hover:bg-white/5 text-gray-400"
-                      }`}
-                    >
-                      <span className="text-xs font-semibold uppercase">{acc.platform}</span>
-                      <span className="text-sm font-medium truncate block mt-1">{acc.displayName}</span>
-                    </button>
-                  );
-                })}
-              </div>
+          <form onSubmit={handleSubmit} className="lg:col-span-7 card p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h2 className="text-lg font-semibold">Programar para el {selectedDate.toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" })}</h2>
+              <span className="text-xs px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 font-medium border border-blue-500/20">
+                {currentFormatInfo.badge}
+              </span>
             </div>
 
             {/* Post Type Select */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-300 block mb-1">Tipo de Formato:</label>
                 <select
@@ -572,6 +571,86 @@ export default function CalendarPage() {
                   onChange={(e) => setScheduledTime(e.target.value)}
                   className="input w-full px-3 py-2 text-sm bg-[#121214] border-white/10"
                 />
+              </div>
+            </div>
+
+            {/* Format Adaptation Helper Banner */}
+            <div className="p-3.5 rounded-lg bg-white/5 border border-white/10 text-xs text-gray-300 space-y-1">
+              <div className="flex items-center gap-1.5 font-medium text-blue-400">
+                <span>⚡ Adaptación automática del formato:</span>
+              </div>
+              <p>{currentFormatInfo.info} {currentFormatInfo.adaptNote}</p>
+            </div>
+
+            {/* Accounts Select Checkboxes */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-300 block">Publicar en estas cuentas:</label>
+                <span className="text-[11px] text-gray-400">
+                  {selectedAccountIds.length} seleccionada(s)
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                {accounts.map(acc => {
+                  const isCompatible = currentFormatInfo.platforms.includes(acc.platform);
+                  const isChecked = selectedAccountIds.includes(acc.id);
+
+                  // Adapt badge text for specific networks
+                  let adaptHint = "";
+                  if (postType === "REEL" && acc.platform === "YOUTUBE") adaptHint = "Short";
+                  if (postType === "FEED_POST" && acc.platform === "LINKEDIN") adaptHint = "Post";
+
+                  return (
+                    <button
+                      key={acc.id}
+                      type="button"
+                      disabled={!isCompatible}
+                      onClick={() => isCompatible && toggleAccountSelection(acc.id)}
+                      className={`p-3 rounded-lg border text-left flex flex-col justify-between transition-all relative ${
+                        !isCompatible
+                          ? "border-white/5 bg-black/30 text-gray-600 cursor-not-allowed opacity-50"
+                          : isChecked
+                          ? "border-blue-500 bg-blue-500/10 text-white shadow-sm ring-1 ring-blue-500/30"
+                          : "border-white/10 hover:bg-white/5 text-gray-400"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold uppercase tracking-wider">{acc.platform}</span>
+                        {adaptHint && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-medium">
+                            {adaptHint}
+                          </span>
+                        )}
+                        {!isCompatible && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400">
+                            No soporta
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-sm font-medium truncate block mt-1.5">{acc.displayName}</span>
+                    </button>
+                  );
+                })}
+
+                {/* Redes compatibles que aún no han sido conectadas en este negocio */}
+                {currentFormatInfo.platforms
+                  .filter(p => !accounts.some(a => a.platform === p))
+                  .map(missingPlatform => (
+                    <a
+                      key={missingPlatform}
+                      href={`/dashboard/${businessId}/connect`}
+                      title={`Haz clic para conectar tu cuenta de ${missingPlatform}`}
+                      className="p-3 rounded-lg border border-dashed border-white/15 hover:border-blue-500/50 hover:bg-blue-500/5 text-gray-500 hover:text-gray-300 transition-all flex flex-col justify-between group"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold uppercase tracking-wider">{missingPlatform}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-gray-400 group-hover:text-blue-400 font-medium">
+                          + Conectar
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-500 mt-1.5">No vinculada aún</span>
+                    </a>
+                  ))}
               </div>
             </div>
 
