@@ -98,14 +98,7 @@ export function formatPayloadForMake(params: {
     }));
   } else if (mediaUrl) {
     const itemType = isVideo ? 'VIDEO' : 'IMAGE';
-    media_urls = [
-      {
-        media_type: itemType,
-        url: mediaUrl,
-        image_url: !isVideo ? mediaUrl : null,
-        video_url: isVideo ? mediaUrl : null,
-      },
-    ];
+    media_urls = [mediaUrl] as any;
     if (isVideo) {
       video_urls = [mediaUrl];
     } else {
@@ -125,6 +118,10 @@ export function formatPayloadForMake(params: {
         },
       ];
     }
+  }
+
+  if (isCarousel && mediaItems) {
+    media_urls = mediaItems.map(i => i.url) as any;
   }
 
   const finalMediaUrl = mediaUrl || (mediaItems && mediaItems.length > 0 ? mediaItems[0].url : null);
