@@ -27,7 +27,12 @@ export interface MakePostPayload {
     media_type: string;
     url: string;
   }>;
-  post_media_category: 'image' | 'video' | 'carousel';
+  files?: Array<{
+    media_type: 'IMAGE' | 'VIDEO';
+    image_url?: string;
+    video_url?: string;
+  }>;
+  post_media_category: 'image' | 'video' | 'carousel' | 'story';
   link_para_post?: string | null;
   platforms: string[];
   metadata?: Record<string, any>;
@@ -54,8 +59,12 @@ export function formatPayloadForMake(params: {
     (mediaUrl || '').toLowerCase().match(/\.(mp4|mov|avi|mkv|webm|3gp|wmv)($|\?)/) !== null
   );
 
-  let post_media_category: 'image' | 'video' | 'carousel' = 'image';
-  if (isCarousel) {
+  const isStory = type === 'STORY';
+
+  let post_media_category: 'image' | 'video' | 'carousel' | 'story' = 'image';
+  if (isStory) {
+    post_media_category = 'story';
+  } else if (isCarousel) {
     post_media_category = 'carousel';
   } else if (isVideo) {
     post_media_category = 'video';
@@ -74,24 +83,35 @@ export function formatPayloadForMake(params: {
 
   let photo_urls: string[] = [];
   let video_urls: string[] = [];
-  let facebook_photos: Array<{ url: string; source: string; type: string; media_type: string }> = [];
+  let facebook_photos: Array<{ url: string; source: string; type: string; caption: string; media_type: string }> = [];
   let linkedin_photos: Array<{ media_type: string; url: string }> = [];
+  let files: Array<{
+    media_type: 'IMAGE' | 'VIDEO';
+    image_url?: string;
+    video_url?: string;
+  }> = [];
 
   if (isCarousel && mediaItems) {
-    media_urls = mediaItems.map(item => ({
-      media_type: item.type === 'VIDEO' ? 'VIDEO' : 'IMAGE',
-      url: item.url,
-      image_url: item.type !== 'VIDEO' ? item.url : null,
-      video_url: item.type === 'VIDEO' ? item.url : null,
-    }));
+    media_urls = mediaItems.map(item => item.url) as any;
     photo_urls = mediaItems.filter(i => i.type === 'IMAGE').map(i => i.url);
     video_urls = mediaItems.filter(i => i.type === 'VIDEO').map(i => i.url);
-    facebook_photos = mediaItems.map(i => ({
-      url: i.url,
-      source: i.url,
-      type: i.type === 'VIDEO' ? 'Video' : 'Photo',
-      media_type: i.type === 'VIDEO' ? 'Video' : 'Photo',
+
+    // Formato exacto que espera CreateCarouselPhoto en Instagram
+    files = mediaItems.map(item => ({
+      media_type: item.type === 'VIDEO' ? 'VIDEO' : 'IMAGE',
+      image_url: item.type !== 'VIDEO' ? item.url : undefined,
+      video_url: item.type === 'VIDEO' ? item.url : undefined,
     }));
+
+    // Formato exacto que espera CreatePostWithPhotos en Facebook
+    facebook_photos = mediaItems.map(item => ({
+      url: item.url,
+      source: item.url,
+      type: 'url',
+      caption: '',
+      media_type: item.type === 'VIDEO' ? 'Video' : 'Photo',
+    }));
+
     linkedin_photos = photo_urls.map(url => ({
       media_type: 'Photo',
       url,
@@ -107,7 +127,8 @@ export function formatPayloadForMake(params: {
         {
           url: mediaUrl,
           source: mediaUrl,
-          type: 'Photo',
+          type: 'url',
+          caption: caption || '',
           media_type: 'Photo',
         },
       ];
@@ -118,10 +139,6 @@ export function formatPayloadForMake(params: {
         },
       ];
     }
-  }
-
-  if (isCarousel && mediaItems) {
-    media_urls = mediaItems.map(i => i.url) as any;
   }
 
   const finalMediaUrl = mediaUrl || (mediaItems && mediaItems.length > 0 ? mediaItems[0].url : null);
@@ -135,6 +152,7 @@ export function formatPayloadForMake(params: {
     photo_urls,
     video_urls,
     video_url: isVideo ? mediaUrl : null,
+    files,
     facebook_photos,
     linkedin_photos,
     post_media_category,
