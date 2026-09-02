@@ -141,7 +141,9 @@ export function formatPayloadForMake(params: {
     }
   }
 
-  const finalMediaUrl = mediaUrl || (mediaItems && mediaItems.length > 0 ? mediaItems[0].url : null);
+  // Si es carrusel y hay fotos, aseguramos que media_url tenga la primera foto para LinkedIn
+  const firstPhotoUrl = photo_urls.length > 0 ? photo_urls[0] : null;
+  const finalMediaUrl = isCarousel ? (firstPhotoUrl || mediaUrl || (mediaItems && mediaItems[0]?.url) || null) : (mediaUrl || (mediaItems && mediaItems.length > 0 ? mediaItems[0].url : null));
 
   return {
     version: '2.0',
