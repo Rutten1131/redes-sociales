@@ -96,23 +96,27 @@ export function formatPayloadForMake(params: {
     photo_urls = mediaItems.filter(i => i.type === 'IMAGE').map(i => i.url);
     video_urls = mediaItems.filter(i => i.type === 'VIDEO').map(i => i.url);
 
-    // Formato exacto que espera CreateCarouselPhoto en Instagram
+    // Formato exacto que espera CreateCarouselPhoto en Instagram (mezcla fotos+videos OK)
     files = mediaItems.map(item => ({
       media_type: item.type === 'VIDEO' ? 'VIDEO' : 'IMAGE',
       image_url: item.type !== 'VIDEO' ? item.url : undefined,
       video_url: item.type === 'VIDEO' ? item.url : undefined,
     }));
 
-    // Formato exacto que espera CreatePostWithPhotos en Facebook
-    facebook_photos = mediaItems.map(item => ({
-      url: item.url,
-      source: item.url,
+    // Facebook CreatePostWithPhotos SOLO acepta imágenes (limitación de la Graph API).
+    // Solo pasamos las fotos del carrusel; los videos no pueden mezclarse en este módulo.
+    facebook_photos = photo_urls.map(url => ({
+      url,
+      source: url,
       type: 'url',
       caption: '',
-      media_type: item.type === 'VIDEO' ? 'Video' : 'Photo',
+      media_type: 'Photo',
     }));
 
-    linkedin_photos = photo_urls.map(url => ({
+    // LinkedIn: La API de Make solo permite 1 imagen por publicación.
+    // En carruseles, publicamos la primera foto como imagen destacada + texto.
+    // No usamos categoría 'carousel' en LinkedIn para evitar rutas no soportadas.
+    linkedin_photos = photo_urls.slice(0, 1).map(url => ({
       media_type: 'Photo',
       url,
     }));
