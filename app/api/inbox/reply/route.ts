@@ -7,6 +7,7 @@ import {
   replyInstagramMessage,
   replyToComment,
 } from "@/lib/integrations/meta";
+import { dispatchReplyViaMake } from "@/lib/integrations/make-inbox";
 
 // POST /api/inbox/reply — enviar respuesta a un DM o comentario
 export async function POST(req: NextRequest) {
@@ -39,43 +40,59 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   }
 
-  const accessToken = decryptToken(item.socialAccount.accessToken);
-
   try {
-    if (item.type === "DM") {
-      // Responder un DM
-      if (!item.fromExternalId) {
-        return NextResponse.json(
-          { error: "No se puede responder: falta el ID del remitente" },
-          { status: 400 }
-        );
-      }
+    const accessToken = decryptToken(item.socialAccount.accessToken);
 
-      if (item.platform === "INSTAGRAM") {
-        await replyInstagramMessage({
-          pageAccessToken: accessToken,
-          recipientId: item.fromExternalId,
+    // Estrategia: si MAKE_INBOX_REPLY_WEBHOOK_URL está configurada, despachar vía Make.
+    // Esto evita la necesidad de Meta App Review.
+    const makeWebhookUrl = process.env.MAKE_INBOX_REPLY_WEBHOOK_URL;
+
+    if (makeWebhookUrl) {
+      await dispatchReplyViaMake({
+        platform: item.platform,
+        type: item.type,
+        externalId: item.externalId,
+        fromExternalId: item.fromExternalId || "",
+        replyMessage: message.trim(),
+        accessToken,
+        pageAccessToken: accessToken,
+      });
+    } else {
+      // Fallback: llamar directamente a Meta Graph API (requiere App Review aprobado)
+
+      if (item.type === "DM") {
+        if (!item.fromExternalId) {
+          return NextResponse.json(
+            { error: "No se puede responder: falta el ID del remitente" },
+            { status: 400 }
+          );
+        }
+
+        if (item.platform === "INSTAGRAM") {
+          await replyInstagramMessage({
+            pageAccessToken: accessToken,
+            recipientId: item.fromExternalId,
+            message: message.trim(),
+          });
+        } else {
+          await replyFacebookMessage({
+            pageAccessToken: accessToken,
+            recipientId: item.fromExternalId,
+            message: message.trim(),
+          });
+        }
+      } else if (item.type === "COMMENT") {
+        await replyToComment({
+          commentId: item.externalId,
+          accessToken,
           message: message.trim(),
         });
       } else {
-        await replyFacebookMessage({
-          pageAccessToken: accessToken,
-          recipientId: item.fromExternalId,
-          message: message.trim(),
-        });
+        return NextResponse.json(
+          { error: `Tipo no soportado: ${item.type}` },
+          { status: 400 }
+        );
       }
-    } else if (item.type === "COMMENT") {
-      // Responder a un comentario
-      await replyToComment({
-        commentId: item.externalId,
-        accessToken,
-        message: message.trim(),
-      });
-    } else {
-      return NextResponse.json(
-        { error: `Tipo no soportado: ${item.type}` },
-        { status: 400 }
-      );
     }
 
     // Marcar como respondido

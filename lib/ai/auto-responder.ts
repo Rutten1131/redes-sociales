@@ -6,6 +6,7 @@ import {
   replyInstagramMessage,
   replyToComment,
 } from "@/lib/integrations/meta";
+import { dispatchReplyViaMake } from "@/lib/integrations/make-inbox";
 
 /**
  * Procesa un InboxItem entrante (DM o Comentario) con el motor de IA.
@@ -64,35 +65,51 @@ export async function processInboxItemWithAi(inboxItemId: string): Promise<{
     };
   }
 
-  // 3. Despachar la respuesta automáticamente a Meta
-  const accessToken = decryptToken(item.socialAccount.accessToken);
-
+  // 3. Despachar la respuesta automáticamente
   try {
-    if (isDM) {
-      if (!item.fromExternalId) {
-        throw new Error("Falta fromExternalId para responder DM");
-      }
+    const accessToken = decryptToken(item.socialAccount.accessToken);
+    const makeWebhookUrl = process.env.MAKE_INBOX_REPLY_WEBHOOK_URL;
 
-      if (item.platform === "INSTAGRAM") {
-        await replyInstagramMessage({
-          pageAccessToken: accessToken,
-          recipientId: item.fromExternalId,
-          message: replyText,
-        });
+    if (makeWebhookUrl) {
+      // Despachar vía Make.com (evita App Review)
+      await dispatchReplyViaMake({
+        platform: item.platform,
+        type: item.type,
+        externalId: item.externalId,
+        fromExternalId: item.fromExternalId || "",
+        replyMessage: replyText,
+        accessToken,
+        pageAccessToken: accessToken,
+      });
+    } else {
+      // Fallback: llamar directamente a Meta Graph API
+
+      if (isDM) {
+        if (!item.fromExternalId) {
+          throw new Error("Falta fromExternalId para responder DM");
+        }
+
+        if (item.platform === "INSTAGRAM") {
+          await replyInstagramMessage({
+            pageAccessToken: accessToken,
+            recipientId: item.fromExternalId,
+            message: replyText,
+          });
+        } else {
+          await replyFacebookMessage({
+            pageAccessToken: accessToken,
+            recipientId: item.fromExternalId,
+            message: replyText,
+          });
+        }
       } else {
-        await replyFacebookMessage({
-          pageAccessToken: accessToken,
-          recipientId: item.fromExternalId,
+        // COMMENT
+        await replyToComment({
+          commentId: item.externalId,
+          accessToken,
           message: replyText,
         });
       }
-    } else {
-      // COMMENT
-      await replyToComment({
-        commentId: item.externalId,
-        accessToken,
-        message: replyText,
-      });
     }
 
     // Marcar como respondido por la IA
@@ -121,3 +138,4 @@ export async function processInboxItemWithAi(inboxItemId: string): Promise<{
     throw dispatchError;
   }
 }
+
