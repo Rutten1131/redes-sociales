@@ -2,13 +2,16 @@
     "name": "RRSS - Receptor de Comentarios y DMs (Meta e IG)",
     "flow": [
         {
-            "id": 1,
-            "module": "gateway:CustomWebHook",
+            "id": 5,
+            "module": "facebook-pages:WatchComments",
             "version": 1,
             "parameters": {
-                "maxResults": 1
+                "__IMTCONN__": 10746705
             },
-            "mapper": {},
+            "mapper": {
+                "page": "275810677566214",
+                "limit": 10
+            },
             "metadata": {
                 "designer": {
                     "x": 0,
@@ -16,95 +19,48 @@
                 },
                 "restore": {
                     "parameters": {
-                        "hook": {
+                        "__IMTCONN__": {
+                            "label": "My Facebook connection (Objetivo Cesar Reyes)",
                             "data": {
-                                "editable": "true"
-                            },
-                            "label": "Webhook-Inbox-Entrada"
+                                "scoped": "true",
+                                "connection": "facebook-pages"
+                            }
                         }
                     }
-                },
-                "parameters": [
-                    {
-                        "name": "hook",
-                        "type": "hook:gateway-webhook",
-                        "label": "Webhook",
-                        "required": true
-                    },
-                    {
-                        "name": "maxResults",
-                        "type": "number",
-                        "label": "Maximum number of results"
-                    }
-                ]
+                }
             }
         },
         {
-            "id": 2,
-            "module": "builtin:BasicRouter",
-            "version": 1,
-            "mapper": null,
+            "id": 3,
+            "module": "http:MakeRequest",
+            "version": 4,
+            "parameters": {
+                "tlsType": "",
+                "proxyKeychain": "",
+                "authenticationType": "noAuth"
+            },
+            "mapper": {
+                "url": "https://redes-sociales-l5q4.vercel.app/api/webhooks/make-inbox",
+                "method": "post",
+                "headers": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": "{\n  \"platform\": \"FACEBOOK\",\n  \"type\": \"COMMENT\",\n  \"externalId\": \"{{5.id}}\",\n  \"parentId\": \"{{5.post_id}}\",\n  \"fromName\": \"{{5.from.name}}\",\n  \"fromExternalId\": \"{{5.from.id}}\",\n  \"content\": \"{{5.message}}\",\n  \"accountExternalId\": \"275810677566214\"\n}",
+                "parseResponse": true,
+                "stopOnHttpError": true,
+                "allowRedirects": true,
+                "shareCookies": false,
+                "requestCompressedContent": true
+            },
             "metadata": {
                 "designer": {
                     "x": 300,
                     "y": 300
                 }
-            },
-            "routes": [
-                {
-                    "flow": [
-                        {
-                            "id": 3,
-                            "module": "http:MakeRequest",
-                            "version": 4,
-                            "parameters": {
-                                "tlsType": "",
-                                "proxyKeychain": "",
-                                "authenticationType": "noAuth"
-                            },
-                            "mapper": {
-                                "url": "https://redes-sociales-l5q4.vercel.app/api/webhooks/make-inbox",
-                                "method": "post",
-                                "headers": [
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/json"
-                                    }
-                                ],
-                                "body": "{\n  \"platform\": \"{{1.platform}}\",\n  \"type\": \"{{1.type}}\",\n  \"externalId\": \"{{1.id}}\",\n  \"parentId\": \"{{1.parentId}}\",\n  \"fromName\": \"{{1.fromName}}\",\n  \"fromExternalId\": \"{{1.fromId}}\",\n  \"content\": \"{{1.content}}\",\n  \"accountExternalId\": \"{{1.accountExternalId}}\"\n}",
-                                "parseResponse": true,
-                                "stopOnHttpError": true,
-                                "allowRedirects": true,
-                                "shareCookies": false,
-                                "requestCompressedContent": true
-                            },
-                            "metadata": {
-                                "designer": {
-                                    "x": 600,
-                                    "y": 150
-                                }
-                            }
-                        },
-                        {
-                            "id": 4,
-                            "module": "gateway:WebhookRespond",
-                            "version": 1,
-                            "parameters": {},
-                            "mapper": {
-                                "status": 200,
-                                "body": "{\"status\":\"success\",\"message\":\"Received and sent to Inbox\"}",
-                                "headers": []
-                            },
-                            "metadata": {
-                                "designer": {
-                                    "x": 900,
-                                    "y": 150
-                                }
-                            }
-                        }
-                    ]
-                }
-            ]
+            }
         }
     ]
 }

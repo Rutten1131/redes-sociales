@@ -1,0 +1,67 @@
+{
+  "name": "RRSS - Receptor de DMs Messenger (Meta)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "facebook-messenger:WatchMessages",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": 10746705
+      },
+      "mapper": {
+        "page": "275810677566214"
+      },
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0,
+          "name": "Vigilar Mensajes de Messenger"
+        },
+        "restore": {
+          "parameters": {
+            "__IMTCONN__": {
+              "label": "My Facebook connection (Objetivo Cesar Reyes)",
+              "data": {
+                "scoped": "true",
+                "connection": "facebook"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "http:MakeRequest",
+      "version": 4,
+      "parameters": {
+        "tlsType": "",
+        "proxyKeychain": "",
+        "authenticationType": "noAuth"
+      },
+      "mapper": {
+        "url": "https://redes-sociales-l5q4.vercel.app/api/webhooks/make-inbox",
+        "method": "post",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": "{\n  \"platform\": \"FACEBOOK\",\n  \"type\": \"DM\",\n  \"externalId\": \"{{1.mid}}\",\n  \"fromName\": \"{{1.sender.name}}\",\n  \"fromExternalId\": \"{{1.sender.id}}\",\n  \"content\": \"{{1.message.text}}\",\n  \"accountExternalId\": \"275810677566214\"\n}",
+        "parseResponse": true,
+        "stopOnHttpError": true,
+        "allowRedirects": true,
+        "shareCookies": false,
+        "requestCompressedContent": true
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0,
+          "name": "Enviar DM a la App"
+        }
+      }
+    }
+  ]
+}

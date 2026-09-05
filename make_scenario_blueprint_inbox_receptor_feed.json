@@ -1,0 +1,110 @@
+{
+  "name": "RRSS - Receptor de Comentarios de Pagina (Meta)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "facebook-pages:ListPosts",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": 10746705
+      },
+      "mapper": {
+        "page": "275810677566214",
+        "limit": 5
+      },
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0,
+          "name": "Facebook Pages - List Posts"
+        },
+        "restore": {
+          "expect": {
+            "page_id": {
+              "mode": "chose",
+              "label": "Objetivo (Loja)"
+            }
+          },
+          "parameters": {
+            "__IMTCONN__": {
+              "data": {
+                "scoped": "true",
+                "connection": "facebook"
+              },
+              "label": "My Facebook connection (Objetivo Cesar Reyes)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "facebook-pages:ListComments",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": 10746705
+      },
+      "mapper": {
+        "post": "{{1.id}}",
+        "limit": 10
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0,
+          "name": "Facebook Pages - List Comments"
+        },
+        "restore": {
+          "expect": {
+            "page_id": {
+              "mode": "chose",
+              "label": "Objetivo (Loja)"
+            }
+          },
+          "parameters": {
+            "__IMTCONN__": {
+              "data": {
+                "scoped": "true",
+                "connection": "facebook"
+              },
+              "label": "My Facebook connection (Objetivo Cesar Reyes)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "http:MakeRequest",
+      "version": 4,
+      "parameters": {
+        "tlsType": "",
+        "proxyKeychain": "",
+        "authenticationType": "noAuth"
+      },
+      "mapper": {
+        "url": "https://redes-sociales-l5q4.vercel.app/api/webhooks/make-inbox",
+        "method": "post",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": "{\n  \"platform\": \"FACEBOOK\",\n  \"type\": \"COMMENT\",\n  \"externalId\": \"{{2.id}}\",\n  \"parentId\": \"{{1.id}}\",\n  \"fromName\": \"{{ifempty(2.from.name, 'Usuario Facebook')}}\",\n  \"fromExternalId\": \"{{2.from.id}}\",\n  \"content\": \"{{2.message}}\",\n  \"accountExternalId\": \"275810677566214\"\n}",
+        "parseResponse": true,
+        "stopOnHttpError": true,
+        "allowRedirects": true,
+        "shareCookies": false,
+        "requestCompressedContent": true
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0,
+          "name": "Enviar a Inbox de la App"
+        }
+      }
+    }
+  ]
+}

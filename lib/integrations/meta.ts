@@ -404,3 +404,122 @@ export async function replyToComment(params: {
   if (!res.ok) throw new Error(`Error respondiendo comentario: ${await res.text()}`);
   return res.json();
 }
+
+// ---------- Obtener Posts y Comentarios (Para sincronización de Inbox) ----------
+
+export interface FetchedComment {
+  id: string;
+  message: string;
+  created_time: string;
+  from?: {
+    id: string;
+    name: string;
+  };
+}
+
+export interface FetchedPostComments {
+  postId: string;
+  comments: FetchedComment[];
+}
+
+/**
+ * Obtiene los últimos posts de una página de Facebook con sus comentarios recientes.
+ * Funciona con el Page Access Token del administrador sin requerir App Review pública.
+ */
+export async function getFacebookRecentComments(params: {
+  pageId: string;
+  pageAccessToken: string;
+  postLimit?: number;
+  commentLimit?: number;
+}): Promise<FetchedPostComments[]> {
+  const { pageId, pageAccessToken, postLimit = 5, commentLimit = 15 } = params;
+
+  // 1. Obtener los últimos posts de la página
+  const postsUrl = `${GRAPH_URL}/${pageId}/feed?fields=id,created_time,comments.limit(${commentLimit}){id,message,created_time,from}&limit=${postLimit}&access_token=${pageAccessToken}`;
+  const res = await fetch(postsUrl);
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`[Meta API Error - getFacebookRecentComments]: ${errText}`);
+    throw new Error(`Error obteniendo comentarios de FB: ${errText}`);
+  }
+
+  const data = await res.json();
+  const results: FetchedPostComments[] = [];
+
+  if (Array.isArray(data.data)) {
+    for (const post of data.data) {
+      const comments: FetchedComment[] = [];
+      if (post.comments && Array.isArray(post.comments.data)) {
+        for (const c of post.comments.data) {
+          if (c.message && c.id) {
+            comments.push({
+              id: c.id,
+              message: c.message,
+              created_time: c.created_time,
+              from: c.from ? { id: c.from.id, name: c.from.name } : undefined,
+            });
+          }
+        }
+      }
+      results.push({
+        postId: post.id,
+        comments,
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Obtiene los últimos posts de Instagram con sus comentarios recientes.
+ */
+export async function getInstagramRecentComments(params: {
+  igUserId: string;
+  accessToken: string;
+  mediaLimit?: number;
+  commentLimit?: number;
+}): Promise<FetchedPostComments[]> {
+  const { igUserId, accessToken, mediaLimit = 5, commentLimit = 15 } = params;
+
+  // 1. Obtener los últimos medios de la cuenta de IG
+  const mediaUrl = `${GRAPH_URL}/${igUserId}/media?fields=id,comments.limit(${commentLimit}){id,text,timestamp,username,from}&limit=${mediaLimit}&access_token=${accessToken}`;
+  const res = await fetch(mediaUrl);
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`[Meta API Error - getInstagramRecentComments]: ${errText}`);
+    throw new Error(`Error obteniendo comentarios de IG: ${errText}`);
+  }
+
+  const data = await res.json();
+  const results: FetchedPostComments[] = [];
+
+  if (Array.isArray(data.data)) {
+    for (const media of data.data) {
+      const comments: FetchedComment[] = [];
+      if (media.comments && Array.isArray(media.comments.data)) {
+        for (const c of media.comments.data) {
+          const text = c.text || c.message;
+          if (text && c.id) {
+            comments.push({
+              id: c.id,
+              message: text,
+              created_time: c.timestamp || new Date().toISOString(),
+              from: {
+                id: c.from?.id || c.username || "ig_user",
+                name: c.username || c.from?.name || "Usuario de Instagram",
+              },
+            });
+          }
+        }
+      }
+      results.push({
+        postId: media.id,
+        comments,
+      });
+    }
+  }
+
+  return results;
+}
+
