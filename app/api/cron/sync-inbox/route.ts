@@ -53,6 +53,8 @@ export async function GET(req: NextRequest) {
                 },
               });
 
+              const commentDate = comment.created_time ? new Date(comment.created_time) : new Date();
+
               if (!existing) {
                 const newItem = await prisma.inboxItem.create({
                   data: {
@@ -61,10 +63,11 @@ export async function GET(req: NextRequest) {
                     type: "COMMENT",
                     externalId: comment.id,
                     parentId: post.postId,
-                    fromName: comment.from?.name || "Usuario",
+                    fromName: comment.from?.name || (comment.from?.id ? `Usuario (${comment.from.id})` : "Usuario"),
                     fromExternalId: comment.from?.id || null,
                     content: comment.message,
                     status: "PENDING",
+                    createdAt: commentDate,
                   },
                 });
 
@@ -75,6 +78,16 @@ export async function GET(req: NextRequest) {
                   console.error(`[Cron Sync FB AI Error ${newItem.id}]:`, err);
                 });
               } else {
+                // Si existía pero no tenía el nombre correcto o la fecha real, actualizarlo
+                await prisma.inboxItem.update({
+                  where: { id: existing.id },
+                  data: {
+                    fromName: comment.from?.name || existing.fromName,
+                    fromExternalId: comment.from?.id || existing.fromExternalId,
+                    parentId: post.postId || existing.parentId,
+                    createdAt: commentDate,
+                  },
+                });
                 totalSkipped++;
               }
             }
@@ -98,6 +111,8 @@ export async function GET(req: NextRequest) {
                 },
               });
 
+              const commentDate = comment.created_time ? new Date(comment.created_time) : new Date();
+
               if (!existing) {
                 const newItem = await prisma.inboxItem.create({
                   data: {
@@ -110,6 +125,7 @@ export async function GET(req: NextRequest) {
                     fromExternalId: comment.from?.id || null,
                     content: comment.message,
                     status: "PENDING",
+                    createdAt: commentDate,
                   },
                 });
 
@@ -119,6 +135,15 @@ export async function GET(req: NextRequest) {
                   console.error(`[Cron Sync IG AI Error ${newItem.id}]:`, err);
                 });
               } else {
+                await prisma.inboxItem.update({
+                  where: { id: existing.id },
+                  data: {
+                    fromName: comment.from?.name || existing.fromName,
+                    fromExternalId: comment.from?.id || existing.fromExternalId,
+                    parentId: media.postId || existing.parentId,
+                    createdAt: commentDate,
+                  },
+                });
                 totalSkipped++;
               }
             }

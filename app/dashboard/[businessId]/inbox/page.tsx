@@ -577,6 +577,22 @@ export default function InboxPage() {
                     {PLATFORM_LABELS[selectedItem.platform]} ·{" "}
                     {selectedItem.socialAccount.displayName} ·{" "}
                     {formatDate(selectedItem.createdAt)}
+                    {selectedItem.type === "COMMENT" && selectedItem.parentId && (
+                      <span style={{ marginLeft: 8 }}>
+                        · <a
+                            href={
+                              selectedItem.platform === "FACEBOOK"
+                                ? `https://facebook.com/${selectedItem.parentId}`
+                                : `https://instagram.com/p/${selectedItem.parentId}`
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "var(--accent)", textDecoration: "underline" }}
+                          >
+                            Ver publicación ↗
+                          </a>
+                      </span>
+                    )}
                   </p>
                 </div>
 

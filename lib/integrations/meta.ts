@@ -420,12 +420,12 @@ export interface FetchedComment {
 
 export interface FetchedPostComments {
   postId: string;
+  postMessage?: string;
   comments: FetchedComment[];
 }
 
 /**
  * Obtiene los últimos posts de una página de Facebook con sus comentarios recientes.
- * Funciona con el Page Access Token del administrador sin requerir App Review pública.
  */
 export async function getFacebookRecentComments(params: {
   pageId: string;
@@ -435,8 +435,8 @@ export async function getFacebookRecentComments(params: {
 }): Promise<FetchedPostComments[]> {
   const { pageId, pageAccessToken, postLimit = 5, commentLimit = 15 } = params;
 
-  // 1. Obtener los IDs de los últimos posts publicados de la página
-  const postsUrl = `${GRAPH_URL}/${pageId}/published_posts?fields=id,created_time&limit=${postLimit}&access_token=${pageAccessToken}`;
+  // 1. Obtener los IDs y textos de los últimos posts publicados
+  const postsUrl = `${GRAPH_URL}/${pageId}/published_posts?fields=id,message,created_time&limit=${postLimit}&access_token=${pageAccessToken}`;
   const res = await fetch(postsUrl);
   if (!res.ok) {
     const errText = await res.text();
@@ -451,8 +451,8 @@ export async function getFacebookRecentComments(params: {
     for (const post of data.data) {
       const comments: FetchedComment[] = [];
       try {
-        // 2. Obtener comentarios de cada post individualmente
-        const commentsUrl = `${GRAPH_URL}/${post.id}/comments?fields=id,message,created_time,from&limit=${commentLimit}&access_token=${pageAccessToken}`;
+        // 2. Obtener comentarios con el campo from{name,id}
+        const commentsUrl = `${GRAPH_URL}/${post.id}/comments?fields=id,message,created_time,from{id,name}&limit=${commentLimit}&access_token=${pageAccessToken}`;
         const cRes = await fetch(commentsUrl);
         if (cRes.ok) {
           const cData = await cRes.json();
@@ -477,6 +477,7 @@ export async function getFacebookRecentComments(params: {
 
       results.push({
         postId: post.id,
+        postMessage: post.message || "Publicación",
         comments,
       });
     }
