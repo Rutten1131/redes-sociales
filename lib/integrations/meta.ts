@@ -435,13 +435,13 @@ export async function getFacebookRecentComments(params: {
 }): Promise<FetchedPostComments[]> {
   const { pageId, pageAccessToken, postLimit = 5, commentLimit = 15 } = params;
 
-  // 1. Obtener los últimos posts publicados de la página (usa pages_manage_posts que ya está activo)
-  const postsUrl = `${GRAPH_URL}/${pageId}/published_posts?fields=id,created_time,comments.limit(${commentLimit}){id,message,created_time,from}&limit=${postLimit}&access_token=${pageAccessToken}`;
+  // 1. Obtener los IDs de los últimos posts publicados de la página
+  const postsUrl = `${GRAPH_URL}/${pageId}/published_posts?fields=id,created_time&limit=${postLimit}&access_token=${pageAccessToken}`;
   const res = await fetch(postsUrl);
   if (!res.ok) {
     const errText = await res.text();
-    console.error(`[Meta API Error - getFacebookRecentComments]: ${errText}`);
-    throw new Error(`Error obteniendo comentarios de FB: ${errText}`);
+    console.error(`[Meta API Error - getFacebookRecentComments posts]: ${errText}`);
+    throw new Error(`Error obteniendo posts de FB: ${errText}`);
   }
 
   const data = await res.json();
@@ -450,18 +450,31 @@ export async function getFacebookRecentComments(params: {
   if (Array.isArray(data.data)) {
     for (const post of data.data) {
       const comments: FetchedComment[] = [];
-      if (post.comments && Array.isArray(post.comments.data)) {
-        for (const c of post.comments.data) {
-          if (c.message && c.id) {
-            comments.push({
-              id: c.id,
-              message: c.message,
-              created_time: c.created_time,
-              from: c.from ? { id: c.from.id, name: c.from.name } : undefined,
-            });
+      try {
+        // 2. Obtener comentarios de cada post individualmente
+        const commentsUrl = `${GRAPH_URL}/${post.id}/comments?fields=id,message,created_time,from&limit=${commentLimit}&access_token=${pageAccessToken}`;
+        const cRes = await fetch(commentsUrl);
+        if (cRes.ok) {
+          const cData = await cRes.json();
+          if (Array.isArray(cData.data)) {
+            for (const c of cData.data) {
+              if (c.message && c.id) {
+                comments.push({
+                  id: c.id,
+                  message: c.message,
+                  created_time: c.created_time,
+                  from: c.from ? { id: c.from.id, name: c.from.name } : undefined,
+                });
+              }
+            }
           }
+        } else {
+          console.warn(`[Meta API Warning - comments for post ${post.id}]:`, await cRes.text());
         }
+      } catch (cErr) {
+        console.warn(`[Meta API Error - comments for post ${post.id}]:`, cErr);
       }
+
       results.push({
         postId: post.id,
         comments,
