@@ -434,8 +434,8 @@ export async function getFacebookRecentComments(params: {
 }): Promise<FetchedPostComments[]> {
   const { pageId, pageAccessToken, postLimit = 5, commentLimit = 15 } = params;
 
-  // 1. Obtener los últimos posts de la página
-  const postsUrl = `${GRAPH_URL}/${pageId}/feed?fields=id,created_time,comments.limit(${commentLimit}){id,message,created_time,from}&limit=${postLimit}&access_token=${pageAccessToken}`;
+  // 1. Obtener los últimos posts publicados de la página (usa pages_manage_posts que ya está activo)
+  const postsUrl = `${GRAPH_URL}/${pageId}/published_posts?fields=id,created_time,comments.limit(${commentLimit}){id,message,created_time,from}&limit=${postLimit}&access_token=${pageAccessToken}`;
   const res = await fetch(postsUrl);
   if (!res.ok) {
     const errText = await res.text();
