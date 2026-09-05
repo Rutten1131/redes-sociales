@@ -6,6 +6,7 @@
             "module": "gateway:CustomWebHook",
             "version": 1,
             "parameters": {
+                "hook": 2771003,
                 "maxResults": 1
             },
             "mapper": {},
@@ -20,7 +21,7 @@
                             "data": {
                                 "editable": "true"
                             },
-                            "label": "Webhook-Inbox-Responder"
+                            "label": "My gateway-webhook webhook"
                         }
                     }
                 },
@@ -55,15 +56,13 @@
                     "flow": [
                         {
                             "id": 10,
-                            "module": "http:MakeRequest",
-                            "version": 4,
+                            "module": "facebook-pages:CreateComment",
+                            "version": 6,
                             "parameters": {
-                                "tlsType": "",
-                                "proxyKeychain": "",
-                                "authenticationType": "noAuth"
+                                "__IMTCONN__": 10746705
                             },
                             "filter": {
-                                "name": "FB Comentario",
+                                "name": "FB Responder Comentario",
                                 "conditions": [
                                     [
                                         {
@@ -80,28 +79,25 @@
                                 ]
                             },
                             "mapper": {
-                                "url": "https://graph.facebook.com/v21.0/{{1.externalId}}/comments",
-                                "method": "post",
-                                "headers": [
-                                    {
-                                        "name": "Content-Type",
-                                        "value": "application/x-www-form-urlencoded"
-                                    }
-                                ],
-                                "bodyType": "raw",
-                                "contentType": "custom",
-                                "body": "message={{1.replyMessage}}&access_token={{1.accessToken}}",
-                                "shareCookies": false,
-                                "parseResponse": true,
-                                "allowRedirects": true,
-                                "stopOnHttpError": true,
-                                "requestCompressedContent": true
+                                "objectId": "{{1.externalId}}",
+                                "message": "{{1.replyMessage}}"
                             },
                             "metadata": {
                                 "designer": {
                                     "x": 600,
-                                    "y": 200,
+                                    "y": 0,
                                     "name": "Responder Comentario FB"
+                                },
+                                "restore": {
+                                    "parameters": {
+                                        "__IMTCONN__": {
+                                            "data": {
+                                                "scoped": "true",
+                                                "connection": "facebook"
+                                            },
+                                            "label": "My Facebook connection (Objetivo Cesar Reyes)"
+                                        }
+                                    }
                                 }
                             }
                         },
@@ -111,19 +107,14 @@
                             "version": 1,
                             "parameters": {},
                             "mapper": {
-                                "body": "{\"success\": true}",
-                                "status": "200",
-                                "headers": [
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/json"
-                                    }
-                                ]
+                                "body": "{\"success\":true}",
+                                "status": 200,
+                                "headers": []
                             },
                             "metadata": {
                                 "designer": {
                                     "x": 900,
-                                    "y": 200
+                                    "y": 0
                                 }
                             }
                         }
@@ -133,15 +124,10 @@
                     "flow": [
                         {
                             "id": 20,
-                            "module": "http:MakeRequest",
-                            "version": 4,
-                            "parameters": {
-                                "tlsType": "",
-                                "proxyKeychain": "",
-                                "authenticationType": "noAuth"
-                            },
+                            "module": "facebook-messenger:sendMessage",
+                            "version": 2,
                             "filter": {
-                                "name": "FB DM",
+                                "name": "FB Responder Mensaje DM",
                                 "conditions": [
                                     [
                                         {
@@ -158,27 +144,13 @@
                                 ]
                             },
                             "mapper": {
-                                "url": "https://graph.facebook.com/v21.0/me/messages?access_token={{1.accessToken}}",
-                                "method": "post",
-                                "headers": [
-                                    {
-                                        "name": "Content-Type",
-                                        "value": "application/json"
-                                    }
-                                ],
-                                "bodyType": "raw",
-                                "contentType": "json",
-                                "body": "{\"recipient\":{\"id\":\"{{1.fromExternalId}}\"},\"message\":{\"text\":\"{{1.replyMessage}}\"}}",
-                                "shareCookies": false,
-                                "parseResponse": true,
-                                "allowRedirects": true,
-                                "stopOnHttpError": true,
-                                "requestCompressedContent": true
+                                "recipient": "{{1.fromExternalId}}",
+                                "text": "{{1.replyMessage}}"
                             },
                             "metadata": {
                                 "designer": {
                                     "x": 600,
-                                    "y": 450,
+                                    "y": 300,
                                     "name": "Responder DM FB"
                                 }
                             }
@@ -189,19 +161,14 @@
                             "version": 1,
                             "parameters": {},
                             "mapper": {
-                                "body": "{\"success\": true}",
-                                "status": "200",
-                                "headers": [
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/json"
-                                    }
-                                ]
+                                "body": "{\"success\":true}",
+                                "status": 200,
+                                "headers": []
                             },
                             "metadata": {
                                 "designer": {
                                     "x": 900,
-                                    "y": 450
+                                    "y": 300
                                 }
                             }
                         }
@@ -211,15 +178,13 @@
                     "flow": [
                         {
                             "id": 30,
-                            "module": "http:MakeRequest",
-                            "version": 4,
+                            "module": "instagram-business:CreateComment",
+                            "version": 1,
                             "parameters": {
-                                "tlsType": "",
-                                "proxyKeychain": "",
-                                "authenticationType": "noAuth"
+                                "__IMTCONN__": 10746705
                             },
                             "filter": {
-                                "name": "IG Comentario",
+                                "name": "IG Responder Comentario",
                                 "conditions": [
                                     [
                                         {
@@ -236,28 +201,25 @@
                                 ]
                             },
                             "mapper": {
-                                "url": "https://graph.facebook.com/v21.0/{{1.externalId}}/replies",
-                                "method": "post",
-                                "headers": [
-                                    {
-                                        "name": "Content-Type",
-                                        "value": "application/x-www-form-urlencoded"
-                                    }
-                                ],
-                                "bodyType": "raw",
-                                "contentType": "custom",
-                                "body": "message={{1.replyMessage}}&access_token={{1.accessToken}}",
-                                "shareCookies": false,
-                                "parseResponse": true,
-                                "allowRedirects": true,
-                                "stopOnHttpError": true,
-                                "requestCompressedContent": true
+                                "commentId": "{{1.externalId}}",
+                                "message": "{{1.replyMessage}}"
                             },
                             "metadata": {
                                 "designer": {
                                     "x": 600,
-                                    "y": 700,
+                                    "y": 600,
                                     "name": "Responder Comentario IG"
+                                },
+                                "restore": {
+                                    "parameters": {
+                                        "__IMTCONN__": {
+                                            "data": {
+                                                "scoped": "true",
+                                                "connection": "facebook"
+                                            },
+                                            "label": "My Facebook connection (Objetivo Cesar Reyes)"
+                                        }
+                                    }
                                 }
                             }
                         },
@@ -267,19 +229,14 @@
                             "version": 1,
                             "parameters": {},
                             "mapper": {
-                                "body": "{\"success\": true}",
-                                "status": "200",
-                                "headers": [
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/json"
-                                    }
-                                ]
+                                "body": "{\"success\":true}",
+                                "status": 200,
+                                "headers": []
                             },
                             "metadata": {
                                 "designer": {
                                     "x": 900,
-                                    "y": 700
+                                    "y": 600
                                 }
                             }
                         }
@@ -289,15 +246,10 @@
                     "flow": [
                         {
                             "id": 40,
-                            "module": "http:MakeRequest",
-                            "version": 4,
-                            "parameters": {
-                                "tlsType": "",
-                                "proxyKeychain": "",
-                                "authenticationType": "noAuth"
-                            },
+                            "module": "facebook-messenger:sendMessage",
+                            "version": 2,
                             "filter": {
-                                "name": "IG DM",
+                                "name": "IG Responder Mensaje DM",
                                 "conditions": [
                                     [
                                         {
@@ -314,27 +266,13 @@
                                 ]
                             },
                             "mapper": {
-                                "url": "https://graph.facebook.com/v21.0/me/messages?access_token={{1.accessToken}}",
-                                "method": "post",
-                                "headers": [
-                                    {
-                                        "name": "Content-Type",
-                                        "value": "application/json"
-                                    }
-                                ],
-                                "bodyType": "raw",
-                                "contentType": "json",
-                                "body": "{\"recipient\":{\"id\":\"{{1.fromExternalId}}\"},\"message\":{\"text\":\"{{1.replyMessage}}\"}}",
-                                "shareCookies": false,
-                                "parseResponse": true,
-                                "allowRedirects": true,
-                                "stopOnHttpError": true,
-                                "requestCompressedContent": true
+                                "recipient": "{{1.fromExternalId}}",
+                                "text": "{{1.replyMessage}}"
                             },
                             "metadata": {
                                 "designer": {
                                     "x": 600,
-                                    "y": 950,
+                                    "y": 900,
                                     "name": "Responder DM IG"
                                 }
                             }
@@ -345,19 +283,14 @@
                             "version": 1,
                             "parameters": {},
                             "mapper": {
-                                "body": "{\"success\": true}",
-                                "status": "200",
-                                "headers": [
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/json"
-                                    }
-                                ]
+                                "body": "{\"success\":true}",
+                                "status": 200,
+                                "headers": []
                             },
                             "metadata": {
                                 "designer": {
                                     "x": 900,
-                                    "y": 950
+                                    "y": 900
                                 }
                             }
                         }
