@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { decryptToken } from "@/lib/crypto";
-import { getFacebookRecentComments, getInstagramRecentComments } from "@/lib/integrations/meta";
+import {
+  getFacebookRecentComments,
+  getInstagramRecentComments,
+  getFacebookRecentDMs,
+  getInstagramRecentDMs,
+} from "@/lib/integrations/meta";
 import { processInboxItemWithAi } from "@/lib/ai/auto-responder";
 
 /**
- * Cron Job para sincronizar comentarios de Facebook e Instagram directamente
- * sin necesidad de Meta App Review ni consumo de operaciones de Make.
+ * Cron Job para sincronizar comentarios Y DMs de Facebook e Instagram directamente
+ * usando la Graph API, sin necesidad de Make para recepción.
  * 
- * Se ejecuta periódicamente mediante Vercel Cron (ej. cada 1 hora).
+ * Se ejecuta periódicamente mediante Vercel Cron o manualmente desde la UI.
  */
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -26,7 +31,8 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    let totalSaved = 0;
+    let totalCommentsSaved = 0;
+    let totalDMsSaved = 0;
     let totalSkipped = 0;
     const errors: string[] = [];
 
@@ -71,14 +77,12 @@ export async function GET(req: NextRequest) {
                   },
                 });
 
-                totalSaved++;
+                totalCommentsSaved++;
 
-                // Opcional: procesar sugerencia con IA
                 processInboxItemWithAi(newItem.id).catch((err) => {
-                  console.error(`[Cron Sync FB AI Error ${newItem.id}]:`, err);
+                  console.error(`[Cron Sync FB Comment AI Error ${newItem.id}]:`, err);
                 });
               } else {
-                // Si existía pero no tenía el nombre correcto o la fecha real, actualizarlo
                 await prisma.inboxItem.update({
                   where: { id: existing.id },
                   data: {
@@ -91,6 +95,55 @@ export async function GET(req: NextRequest) {
                 totalSkipped++;
               }
             }
+          }
+
+          // ---- DMs de Facebook ----
+          try {
+            const fbDMs = await getFacebookRecentDMs({
+              pageId: account.externalId,
+              pageAccessToken: decryptedToken,
+              conversationLimit: 10,
+              messageLimit: 5,
+            });
+
+            for (const dm of fbDMs) {
+              const existing = await prisma.inboxItem.findUnique({
+                where: {
+                  socialAccountId_externalId: {
+                    socialAccountId: account.id,
+                    externalId: dm.id,
+                  },
+                },
+              });
+
+              if (!existing) {
+                const dmDate = dm.created_time ? new Date(dm.created_time) : new Date();
+                const newItem = await prisma.inboxItem.create({
+                  data: {
+                    socialAccountId: account.id,
+                    platform: "FACEBOOK",
+                    type: "DM",
+                    externalId: dm.id,
+                    parentId: null,
+                    fromName: dm.from.name,
+                    fromExternalId: dm.from.id,
+                    content: dm.message,
+                    status: "PENDING",
+                    createdAt: dmDate,
+                  },
+                });
+
+                totalDMsSaved++;
+
+                processInboxItemWithAi(newItem.id).catch((err) => {
+                  console.error(`[Cron Sync FB DM AI Error ${newItem.id}]:`, err);
+                });
+              } else {
+                totalSkipped++;
+              }
+            }
+          } catch (dmErr: any) {
+            console.warn(`[Cron Sync FB DMs Warning ${account.displayName}]:`, dmErr.message);
           }
         } else if (account.platform === "INSTAGRAM") {
           const mediaWithComments = await getInstagramRecentComments({
@@ -129,10 +182,10 @@ export async function GET(req: NextRequest) {
                   },
                 });
 
-                totalSaved++;
+                totalCommentsSaved++;
 
                 processInboxItemWithAi(newItem.id).catch((err) => {
-                  console.error(`[Cron Sync IG AI Error ${newItem.id}]:`, err);
+                  console.error(`[Cron Sync IG Comment AI Error ${newItem.id}]:`, err);
                 });
               } else {
                 await prisma.inboxItem.update({
@@ -148,6 +201,69 @@ export async function GET(req: NextRequest) {
               }
             }
           }
+
+          // ---- DMs de Instagram ----
+          try {
+            // Para IG DMs, necesitamos el Page ID de la página de FB vinculada
+            // Buscamos la cuenta de FB del mismo negocio
+            const linkedFBAccount = await prisma.socialAccount.findFirst({
+              where: {
+                businessId: account.businessId,
+                platform: "FACEBOOK",
+              },
+            });
+
+            if (linkedFBAccount) {
+              const igDMs = await getInstagramRecentDMs({
+                igUserId: account.externalId,
+                accessToken: decryptedToken,
+                pageId: linkedFBAccount.externalId,
+                conversationLimit: 10,
+                messageLimit: 5,
+              });
+
+              for (const dm of igDMs) {
+                const existing = await prisma.inboxItem.findUnique({
+                  where: {
+                    socialAccountId_externalId: {
+                      socialAccountId: account.id,
+                      externalId: dm.id,
+                    },
+                  },
+                });
+
+                if (!existing) {
+                  const dmDate = dm.created_time ? new Date(dm.created_time) : new Date();
+                  const newItem = await prisma.inboxItem.create({
+                    data: {
+                      socialAccountId: account.id,
+                      platform: "INSTAGRAM",
+                      type: "DM",
+                      externalId: dm.id,
+                      parentId: null,
+                      fromName: dm.from.name,
+                      fromExternalId: dm.from.id,
+                      content: dm.message,
+                      status: "PENDING",
+                      createdAt: dmDate,
+                    },
+                  });
+
+                  totalDMsSaved++;
+
+                  processInboxItemWithAi(newItem.id).catch((err) => {
+                    console.error(`[Cron Sync IG DM AI Error ${newItem.id}]:`, err);
+                  });
+                } else {
+                  totalSkipped++;
+                }
+              }
+            } else {
+              console.warn(`[Cron Sync IG DMs] No se encontró cuenta de FB vinculada para ${account.displayName}`);
+            }
+          } catch (dmErr: any) {
+            console.warn(`[Cron Sync IG DMs Warning ${account.displayName}]:`, dmErr.message);
+          }
         }
       } catch (accError: any) {
         console.error(`[Cron Sync Error cuenta ${account.displayName}]:`, accError);
@@ -157,14 +273,15 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      totalSaved,
+      totalCommentsSaved,
+      totalDMsSaved,
       totalSkipped,
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error: any) {
     console.error("[Cron Sync Inbox Fatal Error]:", error);
     return NextResponse.json(
-      { error: error.message || "Error al sincronizar comentarios" },
+      { error: error.message || "Error al sincronizar inbox" },
       { status: 500 }
     );
   }

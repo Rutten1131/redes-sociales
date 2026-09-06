@@ -1,0 +1,78 @@
+{
+    "name": "RRSS - Receptor DMs Messenger",
+    "flow": [
+        {
+            "id": 1,
+            "module": "facebook-messenger:WatchMessages",
+            "version": 1,
+            "parameters": {},
+            "mapper": {},
+            "metadata": {
+                "designer": {
+                    "x": 0,
+                    "y": 0
+                }
+            }
+        },
+        {
+            "id": 2,
+            "module": "http:ActionSendArbitraryPayload",
+            "version": 3,
+            "parameters": {
+                "handleErrors": false,
+                "useCustomHeaders": true,
+                "headers": [
+                    {
+                        "name": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "method": "POST",
+                "url": "https://redes-sociales-l5q4.vercel.app/api/webhooks/make-inbox",
+                "serializeUrl": false,
+                "shareCookies": false,
+                "parseResponse": true,
+                "followRedirect": true,
+                "useMime": true,
+                "bodyType": "raw",
+                "contentType": "application/json",
+                "data": "{\n  \"platform\": \"FACEBOOK\",\n  \"type\": \"DM\",\n  \"externalId\": \"{{1.mid}}\",\n  \"parentId\": null,\n  \"fromName\": \"{{1.sender.name}}\",\n  \"fromExternalId\": \"{{1.sender.id}}\",\n  \"content\": \"{{1.text}}\",\n  \"accountExternalId\": \"275810677566214\"\n}"
+            },
+            "mapper": {
+                "url": "https://redes-sociales-l5q4.vercel.app/api/webhooks/make-inbox",
+                "method": "POST",
+                "headers": [
+                    {
+                        "name": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "data": "{\n  \"platform\": \"FACEBOOK\",\n  \"type\": \"DM\",\n  \"externalId\": \"{{1.mid}}\",\n  \"parentId\": null,\n  \"fromName\": \"{{1.sender.name}}\",\n  \"fromExternalId\": \"{{1.sender.id}}\",\n  \"content\": \"{{1.text}}\",\n  \"accountExternalId\": \"275810677566214\"\n}"
+            },
+            "metadata": {
+                "designer": {
+                    "x": 300,
+                    "y": 0
+                }
+            }
+        }
+    ],
+    "metadata": {
+        "instant": true,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false,
+            "confidential": false,
+            "dataloss": false,
+            "dlq": false,
+            "freshVariables": false
+        },
+        "designer": {
+            "orphans": []
+        }
+    }
+}

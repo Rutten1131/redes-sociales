@@ -538,3 +538,152 @@ export async function getInstagramRecentComments(params: {
   return results;
 }
 
+// ---------- Obtener DMs de Facebook (Conversations API) ----------
+
+export interface FetchedDM {
+  id: string;
+  message: string;
+  created_time: string;
+  from: {
+    id: string;
+    name: string;
+  };
+}
+
+/**
+ * Obtiene los DMs recientes de una Página de Facebook.
+ * Usa GET /{page-id}/conversations para listar conversaciones,
+ * luego GET /{conversation-id}/messages para obtener los mensajes.
+ * Requiere permiso: pages_messaging
+ */
+export async function getFacebookRecentDMs(params: {
+  pageId: string;
+  pageAccessToken: string;
+  conversationLimit?: number;
+  messageLimit?: number;
+}): Promise<FetchedDM[]> {
+  const { pageId, pageAccessToken, conversationLimit = 10, messageLimit = 5 } = params;
+
+  // 1. Obtener conversaciones recientes de la página
+  const convoUrl = `${GRAPH_URL}/${pageId}/conversations?fields=id,participants,updated_time&limit=${conversationLimit}&access_token=${pageAccessToken}`;
+  const convoRes = await fetch(convoUrl);
+  if (!convoRes.ok) {
+    const errText = await convoRes.text();
+    console.error(`[Meta API Error - getFacebookRecentDMs conversations]: ${errText}`);
+    // Si el permiso no está disponible, retornar vacío en vez de fallar
+    if (errText.includes("OAuthException") || errText.includes("permission")) {
+      console.warn("[getFacebookRecentDMs] Permiso pages_messaging no disponible, saltando DMs de FB.");
+      return [];
+    }
+    throw new Error(`Error obteniendo conversaciones de FB: ${errText}`);
+  }
+
+  const convoData = await convoRes.json();
+  const allDMs: FetchedDM[] = [];
+
+  if (!Array.isArray(convoData.data)) return allDMs;
+
+  for (const convo of convoData.data) {
+    try {
+      // 2. Obtener mensajes de cada conversación
+      const msgsUrl = `${GRAPH_URL}/${convo.id}/messages?fields=id,message,created_time,from&limit=${messageLimit}&access_token=${pageAccessToken}`;
+      const msgsRes = await fetch(msgsUrl);
+      if (!msgsRes.ok) {
+        console.warn(`[Meta API Warning - messages for convo ${convo.id}]:`, await msgsRes.text());
+        continue;
+      }
+
+      const msgsData = await msgsRes.json();
+      if (!Array.isArray(msgsData.data)) continue;
+
+      for (const msg of msgsData.data) {
+        // Solo incluir mensajes que NO son de la página (mensajes entrantes)
+        if (msg.message && msg.id && msg.from?.id !== pageId) {
+          allDMs.push({
+            id: msg.id,
+            message: msg.message,
+            created_time: msg.created_time || new Date().toISOString(),
+            from: {
+              id: msg.from?.id || "unknown",
+              name: msg.from?.name || "Usuario de Facebook",
+            },
+          });
+        }
+      }
+    } catch (msgErr) {
+      console.warn(`[Meta API Error - messages for convo ${convo.id}]:`, msgErr);
+    }
+  }
+
+  return allDMs;
+}
+
+/**
+ * Obtiene los DMs recientes de Instagram.
+ * Usa GET /{ig-user-id}/conversations para listar conversaciones,
+ * luego GET /{conversation-id}/messages para obtener los mensajes.
+ * Requiere permiso: instagram_manage_messages
+ * 
+ * NOTA: Para IG, la API de conversations usa el Page Access Token de la
+ * página de Facebook vinculada, y el endpoint usa platform=instagram.
+ */
+export async function getInstagramRecentDMs(params: {
+  igUserId: string;
+  accessToken: string;
+  pageId: string; // Necesitamos el Page ID para filtrar mensajes propios
+  conversationLimit?: number;
+  messageLimit?: number;
+}): Promise<FetchedDM[]> {
+  const { igUserId, accessToken, pageId, conversationLimit = 10, messageLimit = 5 } = params;
+
+  // Para IG, usamos el endpoint /me/conversations con platform=instagram
+  const convoUrl = `${GRAPH_URL}/me/conversations?platform=instagram&fields=id,participants,updated_time&limit=${conversationLimit}&access_token=${accessToken}`;
+  const convoRes = await fetch(convoUrl);
+  if (!convoRes.ok) {
+    const errText = await convoRes.text();
+    console.error(`[Meta API Error - getInstagramRecentDMs conversations]: ${errText}`);
+    if (errText.includes("OAuthException") || errText.includes("permission")) {
+      console.warn("[getInstagramRecentDMs] Permiso instagram_manage_messages no disponible, saltando DMs de IG.");
+      return [];
+    }
+    throw new Error(`Error obteniendo conversaciones de IG: ${errText}`);
+  }
+
+  const convoData = await convoRes.json();
+  const allDMs: FetchedDM[] = [];
+
+  if (!Array.isArray(convoData.data)) return allDMs;
+
+  for (const convo of convoData.data) {
+    try {
+      const msgsUrl = `${GRAPH_URL}/${convo.id}/messages?fields=id,message,created_time,from&limit=${messageLimit}&access_token=${accessToken}`;
+      const msgsRes = await fetch(msgsUrl);
+      if (!msgsRes.ok) {
+        console.warn(`[Meta API Warning - IG messages for convo ${convo.id}]:`, await msgsRes.text());
+        continue;
+      }
+
+      const msgsData = await msgsRes.json();
+      if (!Array.isArray(msgsData.data)) continue;
+
+      for (const msg of msgsData.data) {
+        // Solo incluir mensajes que NO son de la página/cuenta (mensajes entrantes)
+        if (msg.message && msg.id && msg.from?.id !== pageId && msg.from?.id !== igUserId) {
+          allDMs.push({
+            id: msg.id,
+            message: msg.message,
+            created_time: msg.created_time || new Date().toISOString(),
+            from: {
+              id: msg.from?.id || "unknown",
+              name: msg.from?.name || "Usuario de Instagram",
+            },
+          });
+        }
+      }
+    } catch (msgErr) {
+      console.warn(`[Meta API Error - IG messages for convo ${convo.id}]:`, msgErr);
+    }
+  }
+
+  return allDMs;
+}
