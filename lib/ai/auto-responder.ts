@@ -38,8 +38,51 @@ export async function processInboxItemWithAi(inboxItemId: string): Promise<{
     ? Boolean(business.autoReplyDMs)
     : Boolean(business.autoReplyComments);
 
-  // 1. Generar respuesta con Groq
-  const replyText = await generateAiReply({
+  // 1. Obtener contexto del Post original si es un COMENTARIO
+  let postCaption: string | null = null;
+  if (!isDM && item.parentId) {
+    try {
+      // Buscar primero si el post fue publicado desde nuestro publicador interno
+      const localPost = await prisma.scheduledPost.findFirst({
+        where: {
+          externalPostId: item.parentId,
+        },
+        select: {
+          caption: true,
+        },
+      });
+
+      if (localPost?.caption) {
+        postCaption = localPost.caption;
+        console.log(`[Auto-Responder] Contexto obtenido de ScheduledPost para item ${inboxItemId}: "${postCaption.slice(0, 60)}..."`);
+      } else {
+        // Fallback: Si el post fue publicado fuera de la app (en Meta Business Suite o app móvil),
+        // consultamos directamente a la Graph API para obtener el texto del post
+        try {
+          const accessToken = decryptToken(item.socialAccount.accessToken);
+          const postUrl = item.platform === "INSTAGRAM"
+            ? `https://graph.facebook.com/v19.0/${item.parentId}?fields=caption&access_token=${accessToken}`
+            : `https://graph.facebook.com/v19.0/${item.parentId}?fields=message&access_token=${accessToken}`;
+
+          const pRes = await fetch(postUrl);
+          if (pRes.ok) {
+            const pData = await pRes.json();
+            postCaption = pData.caption || pData.message || null;
+            if (postCaption) {
+              console.log(`[Auto-Responder] Contexto obtenido directo de Graph API para ${item.parentId}: "${postCaption.slice(0, 60)}..."`);
+            }
+          }
+        } catch (metaErr) {
+          console.warn(`[Auto-Responder] No se pudo consultar Graph API para post ${item.parentId}:`, metaErr);
+        }
+      }
+    } catch (postErr) {
+      console.warn(`[Auto-Responder] No se pudo obtener post caption para ${item.parentId}:`, postErr);
+    }
+  }
+
+  // 2. Generar respuesta estructurada con Groq
+  const aiResult = await generateAiReply({
     businessName: business.name,
     aiPrompt: business.aiPrompt,
     aiDMsPrompt: business.aiDMsPrompt,
@@ -49,23 +92,47 @@ export async function processInboxItemWithAi(inboxItemId: string): Promise<{
     platform: item.platform,
     fromName: item.fromName,
     content: item.content,
+    postCaption,
   });
 
-  // 2. Si no está activado el auto-despacho automático, solo guardar la sugerencia
+  const { replyMessage, needsHuman, reason } = aiResult;
+
+  // 3. Si la IA detectó que REQUIERE ATENCIÓN HUMANA (queja, reembolso, cliente enojado)
+  if (needsHuman) {
+    console.warn(`[Auto-Responder 🚨 NEEDS HUMAN] Item ${inboxItemId} requiere atención humana. Motivo: ${reason}`);
+    await prisma.inboxItem.update({
+      where: { id: inboxItemId },
+      data: {
+        aiSuggestedReply: `⚠️ [REQUIERE ATENCIÓN HUMANA: ${reason}]\nSugerencia: ${replyMessage}`,
+      },
+    });
+
+    return {
+      repliedAutomatically: false,
+      replyText: replyMessage,
+    };
+  }
+
+  // 4. Si el auto-reply está apagado en settings, solo guardar la sugerencia para revisión del usuario
   if (!shouldAutoReply) {
     await prisma.inboxItem.update({
       where: { id: inboxItemId },
       data: {
-        aiSuggestedReply: replyText,
+        aiSuggestedReply: replyMessage,
       },
     });
     return {
       repliedAutomatically: false,
-      replyText,
+      replyText: replyMessage,
     };
   }
 
-  // 3. Despachar la respuesta automáticamente
+  // 5. Retardo humano natural (3 a 5 segundos) para no parecer un bot instantáneo
+  const delayMs = Math.floor(Math.random() * 2000) + 3000; // entre 3000ms y 5000ms
+  console.log(`[Auto-Responder] Esperando ${delayMs}ms para simular respuesta humana natural...`);
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+  // 6. Despachar la respuesta automáticamente
   try {
     const accessToken = decryptToken(item.socialAccount.accessToken);
     const makeWebhookUrl = process.env.MAKE_INBOX_REPLY_WEBHOOK_URL;
@@ -77,13 +144,12 @@ export async function processInboxItemWithAi(inboxItemId: string): Promise<{
         type: item.type,
         externalId: item.externalId,
         fromExternalId: item.fromExternalId || "",
-        replyMessage: replyText,
+        replyMessage: replyMessage,
         accessToken,
         pageAccessToken: accessToken,
       });
     } else {
       // Fallback: llamar directamente a Meta Graph API
-
       if (isDM) {
         if (!item.fromExternalId) {
           throw new Error("Falta fromExternalId para responder DM");
@@ -93,13 +159,13 @@ export async function processInboxItemWithAi(inboxItemId: string): Promise<{
           await replyInstagramMessage({
             pageAccessToken: accessToken,
             recipientId: item.fromExternalId,
-            message: replyText,
+            message: replyMessage,
           });
         } else {
           await replyFacebookMessage({
             pageAccessToken: accessToken,
             recipientId: item.fromExternalId,
-            message: replyText,
+            message: replyMessage,
           });
         }
       } else {
@@ -107,7 +173,7 @@ export async function processInboxItemWithAi(inboxItemId: string): Promise<{
         await replyToComment({
           commentId: item.externalId,
           accessToken,
-          message: replyText,
+          message: replyMessage,
         });
       }
     }
@@ -118,13 +184,13 @@ export async function processInboxItemWithAi(inboxItemId: string): Promise<{
       data: {
         status: "ANSWERED",
         aiReplied: true,
-        aiSuggestedReply: replyText,
+        aiSuggestedReply: replyMessage,
       },
     });
 
     return {
       repliedAutomatically: true,
-      replyText,
+      replyText: replyMessage,
     };
   } catch (dispatchError: any) {
     console.error(`[Auto-Responder Dispatch Error]:`, dispatchError);
@@ -132,7 +198,7 @@ export async function processInboxItemWithAi(inboxItemId: string): Promise<{
     await prisma.inboxItem.update({
       where: { id: inboxItemId },
       data: {
-        aiSuggestedReply: replyText,
+        aiSuggestedReply: replyMessage,
       },
     });
     throw dispatchError;

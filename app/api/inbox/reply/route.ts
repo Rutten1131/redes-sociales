@@ -95,10 +95,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Marcar como respondido
+    // Marcar como respondido y guardar el texto enviado
     const updated = await prisma.inboxItem.update({
       where: { id: itemId },
-      data: { status: "ANSWERED" },
+      data: {
+        status: "ANSWERED",
+        aiSuggestedReply: message.trim(),
+      },
     });
 
     return NextResponse.json({ success: true, item: updated });

@@ -159,6 +159,17 @@ export default function CalendarPage() {
   const [caption, setCaption] = useState("");
   const [scheduledTime, setScheduledTime] = useState("12:00");
 
+  // Adaptive social copies state
+  const [generalContext, setGeneralContext] = useState("");
+  const [platformCaptions, setPlatformCaptions] = useState<Record<string, string>>({
+    INSTAGRAM: "",
+    FACEBOOK: "",
+    LINKEDIN: "",
+    YOUTUBE: "",
+  });
+  const [generatingCopys, setGeneratingCopys] = useState(false);
+  const [activeCopyTab, setActiveCopyTab] = useState<"INSTAGRAM" | "FACEBOOK" | "LINKEDIN" | "YOUTUBE">("INSTAGRAM");
+
   // Editing state
   const [editingPost, setEditingPost] = useState<ScheduledPost | null>(null);
   const [editCaption, setEditCaption] = useState("");
@@ -346,6 +357,62 @@ export default function CalendarPage() {
     }
   }
 
+  async function handleGenerateCopys() {
+    if (!generalContext.trim()) {
+      setFormError("Por favor ingresa primero el contexto general de la publicación.");
+      return;
+    }
+
+    setGeneratingCopys(true);
+    setFormError(null);
+
+    try {
+      // Tomar plataformas de las cuentas seleccionadas (o todas por defecto si no hay ninguna aún)
+      const selectedAccounts = accounts.filter(a => selectedAccountIds.includes(a.id));
+      const targetPlatforms = Array.from(new Set(
+        selectedAccounts.length > 0
+          ? selectedAccounts.map(a => a.platform)
+          : ["INSTAGRAM", "FACEBOOK", "LINKEDIN", "YOUTUBE"]
+      ));
+
+      const res = await fetch("/api/ai/generate-copys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessId,
+          generalContext,
+          platforms: targetPlatforms,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Error al generar los copys.");
+      }
+
+      if (data.copys) {
+        setPlatformCaptions(prev => ({
+          ...prev,
+          ...data.copys,
+        }));
+
+        // Si la pestaña actual tiene un copy generado, mantenerla o cambiar a la primera disponible
+        if (targetPlatforms.length > 0 && !targetPlatforms.includes(activeCopyTab)) {
+          setActiveCopyTab(targetPlatforms[0] as any);
+        }
+
+        // Si no había caption general, poner el de la pestaña activa como fallback
+        if (!caption && data.copys[activeCopyTab]) {
+          setCaption(data.copys[activeCopyTab]);
+        }
+      }
+    } catch (err: any) {
+      setFormError(err.message || "Error al conectar con el asistente IA");
+    } finally {
+      setGeneratingCopys(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
@@ -379,6 +446,7 @@ export default function CalendarPage() {
         socialAccountIds: selectedAccountIds,
         type: postType,
         caption: caption || undefined,
+        platformCaptions,
         scheduledAt: postDate.toISOString(),
         ...(postType === "CAROUSEL"
           ? { mediaItems: carouselItems }
@@ -402,6 +470,13 @@ export default function CalendarPage() {
       setCarouselItems([]);
       setUploadProgress("");
       setCaption("");
+      setGeneralContext("");
+      setPlatformCaptions({
+        INSTAGRAM: "",
+        FACEBOOK: "",
+        LINKEDIN: "",
+        YOUTUBE: "",
+      });
       loadData();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Ocurrió un error inesperado");
@@ -725,15 +800,124 @@ export default function CalendarPage() {
               </label>
             </div>
 
-            {/* Caption Textarea */}
-            <div>
-              <label className="text-sm font-medium text-gray-300 block mb-1">Descripción / Copia:</label>
+            {/* Contexto General y Copys Adaptativos con IA */}
+            <div className="space-y-3 bg-[#16161a] border border-white/10 p-3.5 rounded-xl">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-gray-200 flex items-center gap-1.5">
+                  <span>💡</span> Contexto General de la Publicación:
+                </label>
+                <button
+                  type="button"
+                  onClick={handleGenerateCopys}
+                  disabled={generatingCopys || !generalContext.trim()}
+                  className="px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+                >
+                  {generatingCopys ? (
+                    <>
+                      <div className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                      <span>Redactando copys con IA...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>✨</span>
+                      <span>Generar Copys con IA</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
               <textarea
-                placeholder="Escribe lo que acompañará tu publicación..."
+                placeholder="Describe el tema, oferta o mensaje clave de esta publicación (ej: Nuevo video de YouTube sobre automatizaciones de IA, o Promoción 20% de descuento en el curso de marketing)..."
+                value={generalContext}
+                onChange={(e) => setGeneralContext(e.target.value)}
+                rows={2}
+                className="input w-full px-3 py-2 text-xs bg-[#101012] border-white/10 resize-none leading-relaxed"
+              />
+
+              {/* Tabs por Red Social para editar cada Copy individualmente */}
+              <div className="pt-2 border-t border-white/5">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                    Copys Adaptados por Red:
+                  </span>
+                  <span className="text-[10px] text-gray-500">
+                    Cada red recibe su copy personalizado y editable
+                  </span>
+                </div>
+
+                <div className="flex bg-[#101012] border border-white/10 rounded-lg p-0.5 gap-1 mb-2">
+                  {[
+                    { key: "INSTAGRAM" as const, label: "Instagram", icon: "📸" },
+                    { key: "FACEBOOK" as const, label: "Facebook", icon: "👥" },
+                    { key: "LINKEDIN" as const, label: "LinkedIn", icon: "💼" },
+                    { key: "YOUTUBE" as const, label: "YouTube", icon: "▶️" },
+                  ].map(tab => {
+                    const hasCustomCopy = !!platformCaptions[tab.key]?.trim();
+                    return (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => {
+                          setActiveCopyTab(tab.key);
+                          setPreviewTab(tab.key);
+                        }}
+                        className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 ${
+                          activeCopyTab === tab.key
+                            ? "bg-white/15 text-white shadow-sm"
+                            : "text-gray-400 hover:text-gray-200"
+                        }`}
+                      >
+                        <span className="text-[11px]">{tab.icon}</span>
+                        <span>{tab.label}</span>
+                        {hasCustomCopy && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title="Copy personalizado generado" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Editor del copy de la red activa */}
+                <div className="relative">
+                  <textarea
+                    placeholder={`Copy específico adaptado para ${activeCopyTab} (o déjalo vacío para usar la descripción general)...`}
+                    value={platformCaptions[activeCopyTab] ?? ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPlatformCaptions(prev => ({
+                        ...prev,
+                        [activeCopyTab]: val,
+                      }));
+                      // Sincronizar con caption general si es la activa
+                      setCaption(val);
+                    }}
+                    rows={4}
+                    className="input w-full px-3 py-2 text-xs bg-[#101012] border-white/10 resize-none font-mono text-gray-200 leading-relaxed"
+                  />
+                  <div className="flex items-center justify-between text-[10px] text-gray-500 mt-1 px-1">
+                    <span>
+                      {activeCopyTab === "INSTAGRAM" && "Optimizador: Gancho inicial, emojis, CTA y hashtags"}
+                      {activeCopyTab === "FACEBOOK" && "Optimizador: Cercano, conversacional, invitando a comentar"}
+                      {activeCopyTab === "LINKEDIN" && "Optimizador: Profesional, networking, lecciones B2B"}
+                      {activeCopyTab === "YOUTUBE" && "Optimizador: Título SEO sugerido + Descripción estructurada"}
+                    </span>
+                    <span>{(platformCaptions[activeCopyTab] || "").length} caracteres</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Fallback de Descripción general opcional (solo si no se usan las pestañas de red) */}
+            <div>
+              <label className="text-xs font-medium text-gray-400 block mb-1">
+                Descripción genérica de respaldo (opcional):
+              </label>
+              <textarea
+                placeholder="Texto fallback si alguna red no tiene copy específico..."
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
-                rows={4}
-                className="input w-full px-3 py-2 text-sm bg-[#121214] border-white/10 resize-none"
+                rows={2}
+                className="input w-full px-3 py-2 text-xs bg-[#121214] border-white/10 resize-none text-gray-300"
               />
             </div>
 
@@ -786,7 +970,7 @@ export default function CalendarPage() {
                     </div>
                   </div>
                   <p className="whitespace-pre-wrap text-xs mb-3 text-gray-200 min-h-[14px]">
-                    {caption || "Escribe una descripción en el formulario para ver la vista previa..."}
+                    {platformCaptions.FACEBOOK || caption || "Escribe una descripción en el formulario para ver la vista previa..."}
                   </p>
                   <div className="aspect-video w-full rounded-md bg-black/40 overflow-hidden flex items-center justify-center border border-white/5">
                     <CarouselPreview items={previewMediaItems} />
@@ -817,7 +1001,9 @@ export default function CalendarPage() {
                     </div>
                     <p>
                       <span className="font-semibold mr-1.5">{activePreviewAccount.displayName}</span>
-                      <span className="text-gray-300 whitespace-pre-wrap">{caption}</span>
+                      <span className="text-gray-300 whitespace-pre-wrap">
+                        {platformCaptions.INSTAGRAM || caption}
+                      </span>
                     </p>
                   </div>
                 </div>
@@ -830,7 +1016,7 @@ export default function CalendarPage() {
                     <CarouselPreview items={previewMediaItems} />
                   </div>
                   <h3 className="font-bold text-sm line-clamp-2">
-                    {postType === "SHORT" ? "#Shorts" : ""} {caption ? caption.slice(0, 60) : "Título del Video"}
+                    {postType === "SHORT" ? "#Shorts" : ""} {(platformCaptions.YOUTUBE || caption) ? (platformCaptions.YOUTUBE || caption).slice(0, 60) : "Título del Video"}
                   </h3>
                   <div className="flex items-center gap-2 mt-3">
                     <div className="w-7 h-7 rounded-full bg-red-600 flex items-center justify-center font-bold text-xs uppercase text-white">
@@ -857,7 +1043,7 @@ export default function CalendarPage() {
                     </div>
                   </div>
                   <p className="whitespace-pre-wrap text-xs mb-3 text-gray-200 min-h-[14px]">
-                    {caption || "Escribe una descripción..."}
+                    {platformCaptions.LINKEDIN || caption || "Escribe una descripción..."}
                   </p>
                   <div className="aspect-video w-full rounded-md bg-black/40 overflow-hidden flex items-center justify-center border border-white/5">
                     <CarouselPreview items={previewMediaItems} />

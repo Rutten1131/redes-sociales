@@ -13,6 +13,7 @@ const schema = z.object({
   socialAccountIds: z.array(z.string()).min(1),
   type: z.enum(["FEED_POST", "REEL", "STORY", "VIDEO", "SHORT", "CAROUSEL", "VIDEO_NORMAL"]),
   caption: z.string().optional(),
+  platformCaptions: z.record(z.string(), z.string()).optional(), // mapa de copys específicos por red social
   mediaUrl: z.string().url().optional(),       // opcional para CAROUSEL
   mediaItems: z.array(mediaItemSchema).optional(), // solo para CAROUSEL
   thumbnailUrl: z.string().url().optional(),
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { socialAccountIds, type, caption, mediaUrl, mediaItems, thumbnailUrl, scheduledAt } = parsed.data;
+  const { socialAccountIds, type, caption, platformCaptions, mediaUrl, mediaItems, thumbnailUrl, scheduledAt } = parsed.data;
 
   // Validación: CAROUSEL necesita mediaItems, el resto necesita mediaUrl
   if (type === "CAROUSEL" && (!mediaItems || mediaItems.length < 2)) {
@@ -92,13 +93,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const finalCaption = (platformCaptions && platformCaptions[account.platform]?.trim())
+      ? platformCaptions[account.platform].trim()
+      : (caption || null);
+
     const post = await prisma.scheduledPost.create({
       data: {
         userId: session.user.id,
         socialAccountId: account.id,
         platform: account.platform,
         type: dbType,
-        caption,
+        caption: finalCaption,
         mediaUrl: mediaUrl ?? "",
         thumbnailUrl,
         scheduledAt: new Date(scheduledAt),

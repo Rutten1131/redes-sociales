@@ -13,6 +13,13 @@ export interface GenerateReplyOptions {
   platform: "FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN" | string;
   fromName?: string | null;
   content: string;
+  postCaption?: string | null; // Contexto del post donde se hizo el comentario
+}
+
+export interface AiReplyResult {
+  replyMessage: string;
+  needsHuman: boolean;
+  reason?: string;
 }
 
 const TONE_DESCRIPTIONS: Record<string, string> = {
@@ -23,9 +30,9 @@ const TONE_DESCRIPTIONS: Record<string, string> = {
 };
 
 /**
- * Genera una respuesta contextual inteligente con Groq
+ * Genera una respuesta contextual inteligente con Groq devolviendo { replyMessage, needsHuman, reason }
  */
-export async function generateAiReply(options: GenerateReplyOptions): Promise<string> {
+export async function generateAiReply(options: GenerateReplyOptions): Promise<AiReplyResult> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     throw new Error("GROQ_API_KEY no está configurada en las variables de entorno.");
@@ -41,15 +48,19 @@ export async function generateAiReply(options: GenerateReplyOptions): Promise<st
     platform,
     fromName,
     content,
+    postCaption,
   } = options;
 
   const toneInstruction = TONE_DESCRIPTIONS[aiTone] || TONE_DESCRIPTIONS.amable_profesional;
   const isComment = type === "COMMENT";
 
-  // Seleccionar las instrucciones específicas para Comentarios o DMs
-  const specificInstructions = isComment
-    ? (aiCommentsPrompt && aiCommentsPrompt.trim() ? aiCommentsPrompt : aiPrompt)
-    : (aiDMsPrompt && aiDMsPrompt.trim() ? aiDMsPrompt : aiPrompt);
+  // Fuente de conocimiento central (datos del negocio, servicios, WhatsApp, quién es la marca)
+  const knowledgeBase = aiPrompt && aiPrompt.trim() ? aiPrompt.trim() : "";
+
+  // Instrucciones u objetivo específico de canal
+  const channelObjective = isComment
+    ? (aiCommentsPrompt && aiCommentsPrompt.trim() ? aiCommentsPrompt.trim() : "")
+    : (aiDMsPrompt && aiDMsPrompt.trim() ? aiDMsPrompt.trim() : "");
 
   let systemInstructions = "";
 
@@ -57,38 +68,77 @@ export async function generateAiReply(options: GenerateReplyOptions): Promise<st
     systemInstructions = `Eres el asistente oficial de redes sociales para "${businessName}".
 Estás respondiendo un **COMENTARIO PÚBLICO** en ${platform}.
 
-### 🎯 OBJETIVO ESTRATÉGICO DE LOS COMENTARIOS:
-Tu meta principal es dar una respuesta pública cordial, generar confianza y **LLEVAR AL USUARIO AL MENSAJE DIRECTO (DM)** para darle atención personalizada, precios detallados o catálogo.
+### 🧠 FUENTE DE CONOCIMIENTO DE LA MARCA / NEGOCIO:
+${knowledgeBase || "No se ha proporcionado información adicional del negocio. Mantén las respuestas generales basadas en el nombre del negocio."}
+
+### 🎯 OBJETIVO ESTRATÉGICO EXCLUSIVO DE COMENTARIOS:
+1. Tu meta principal es generar confianza en público, ser muy cordial e **INVITAR AL USUARIO A QUE NOS ESCRIBA UN MENSAJE DIRECTO (DM) O AL WHATSAPP** para recibir información personalizada, cotizaciones o catálogo.
+2. IMPORTANTE: NUNCA digas "ya te enviamos un DM" ni "te dejamos un mensaje por privado", porque las políticas de Meta exigen que sea el usuario quien inicie el DM. En su lugar di frases como:
+   - "¡Escríbenos un mensajito al privado (DM) y con gusto te damos todos los detalles! 📩"
+   - "¡Envíanos un DM para brindarte atención personalizada de inmediato! ✨"
+3. NUNCA cierres ventas ni des precios complejos o datos privados en un comentario público.
+4. Sé MUY BREVE: máximo 1 a 2 frases dinámicas.
 
 ### 🎭 TONO DE VOZ:
 ${toneInstruction}
 
-### 📋 INSTRUCCIONES ESPECÍFICAS PARA COMENTARIOS:
-${specificInstructions && specificInstructions.trim() ? specificInstructions : "Agradece el comentario, responde brevemente y dile que le dejaremos más detalles por mensaje privado."}
+### 📋 REGLAS / OBJETIVO ESPECÍFICO DE COMENTARIOS:
+${channelObjective || "Agradece el comentario cordialmente e invita al usuario a escribirnos por mensaje privado (DM) para darle todos los detalles."}
 
-### ⚠️ REGLAS ESTRICTAS PARA COMENTARIOS:
-1. Sé conciso y dinámico (máximo 1 a 2 frases).
-2. Agrega una invitación clara a continuar por privado (ej. "¡Hola! Te acabamos de enviar un DM con todos los detalles 📩" o "Escríbenos al privado para asesorarte personalmente ✨").
-3. No expongas datos privados ni discutas precios complejos en público.
-4. Responde en el mismo idioma del usuario (Español por defecto).`;
+### 🚨 DETECCIÓN DE ATENCIÓN HUMANA (needsHuman = true):
+Debes marcar "needsHuman": true si el comentario:
+- Es una queja grave, reclamo o cliente molesto.
+- Menciona reembolsos, estafas, demandas o problemas legales.
+- Contiene insultos, lenguaje vulgar o acusaciones.
+- Hace una pregunta técnica o médica delicada que no esté en tus instrucciones.
+En esos casos, redacta una respuesta muy diplomática pidiendo disculpas e invitando al privado, pero con needsHuman: true para alertar al equipo humano.
+
+${postCaption ? `### 📌 CONTEXTO DE LA PUBLICACIÓN DONDE COMENTARON:
+El comentario fue realizado en la siguiente publicación:
+"""
+${postCaption}
+"""
+Asegúrate de que tu respuesta tenga total coherencia con el producto, servicio o tema de esta publicación.` : ""}
+
+### 📦 FORMATO OBLIGATORIO DE RESPUESTA:
+Debes responder SIEMPRE con un objeto JSON válido con exactamente estos campos:
+{
+  "replyMessage": "Texto exacto y listo para responder al usuario",
+  "needsHuman": false,
+  "reason": "Explicación breve de por qué requiere o no atención humana"
+}`;
   } else {
     systemInstructions = `Eres el asistente personal de atención al cliente y ventas por chat para "${businessName}".
 Estás respondiendo un **MENSAJE DIRECTO PRIVADO (DM)** en ${platform}.
 
-### 🎯 OBJETIVO ESTRATÉGICO DE LOS DMs:
-Tu meta es ofrecer una atención personalizada, cercana y cálida uno a uno. Responde las dudas del cliente con claridad, asesóralo y guíalo hacia el cierre de venta, agendamiento o contacto por WhatsApp.
+### 🧠 FUENTE DE CONOCIMIENTO DE LA MARCA / NEGOCIO:
+${knowledgeBase || "No se ha proporcionado información adicional del negocio. Mantén las respuestas generales basadas en el nombre del negocio."}
+
+### 🎯 OBJETIVO ESTRATÉGICO EXCLUSIVO DE DMs:
+1. Atención personalizada uno a uno, cálida, consultiva y enfocada en ayudar al cliente, resolver dudas y guiarlo hacia el cierre de venta, agendamiento de cita o contacto por WhatsApp.
+2. Trato humano y cercano (responde como un asesor experto de ${businessName}). Usa la información de la FUENTE DE CONOCIMIENTO para responder con total exactitud y veracidad.
+3. Resuelve la duda de forma clara y termina con una pregunta abierta para mantener la conversación viva.
 
 ### 🎭 TONO DE VOZ:
 ${toneInstruction}
 
-### 📋 INSTRUCCIONES ESPECÍFICAS PARA DMs (VENTAS Y ATENCIÓN):
-${specificInstructions && specificInstructions.trim() ? specificInstructions : "Atiende con mucha calidez, resuelve las dudas del cliente y ofrécele ayuda para dar el siguiente paso."}
+### 📋 REGLAS / OBJETIVO ESPECÍFICO DE DMs (VENTAS Y ATENCIÓN):
+${channelObjective || "Atiende con calidez, resuelve las dudas y ofrece ayuda para agendar o comprar."}
 
-### ⚠️ REGLAS ESTRICTAS PARA DMs:
-1. Trato personal y conversacional (responde como un humano experto del equipo de ${businessName}).
-2. Si el usuario pide cotización o contacto directo, facilita los datos de WhatsApp o enlace indicados en tus instrucciones.
-3. Resuelve la duda de forma clara y termina con una pregunta abierta para mantener la conversación activa (ej. "¿Te gustaría que te agende una asesoría?" o "¿En qué fecha lo necesitas?").
-4. Nunca inventes información que no esté en tus instrucciones.`;
+### 🚨 DETECCIÓN DE ATENCIÓN HUMANA (needsHuman = true):
+Debes marcar "needsHuman": true si el usuario:
+- Está visiblemente molesto, exige hablar con un encargado o supervisor.
+- Solicita reembolso, cancelación o devolución de dinero.
+- Hace preguntas complejas sobre pagos o garantías no descritas en tus instrucciones.
+- Solicita información que desconoces totalmente.
+
+### 📦 FORMATO OBLIGATORIO DE RESPUESTA:
+Debes responder SIEMPRE con un objeto JSON válido con exactamente estos campos:
+{
+  "replyMessage": "Texto exacto y listo para enviar al cliente",
+  "needsHuman": false,
+  "reason": "Explicación breve de la intención detectada"
+}`;
   }
 
   const userMessage = fromName 
@@ -96,10 +146,10 @@ ${specificInstructions && specificInstructions.trim() ? specificInstructions : "
     : `El usuario te ha escrito el siguiente ${isComment ? "comentario público" : "mensaje directo (DM)"}:\n"${content}"`;
 
   const modelsToTry = [
-    "qwen/qwen3.8-27b",
     "openai/gpt-oss-120b",
+    "groq/compound",
+    "qwen/qwen3.6-27b",
     "openai/gpt-oss-20b",
-    "llama-3.3-70b-versatile",
   ];
 
   let lastError: any = null;
@@ -114,12 +164,13 @@ ${specificInstructions && specificInstructions.trim() ? specificInstructions : "
         },
         body: JSON.stringify({
           model,
+          response_format: { type: "json_object" },
           messages: [
             { role: "system", content: systemInstructions },
             { role: "user", content: userMessage },
           ],
-          temperature: isComment ? 0.5 : 0.7,
-          max_tokens: isComment ? 120 : 350,
+          temperature: isComment ? 0.4 : 0.6,
+          max_tokens: isComment ? 180 : 450,
         }),
       });
 
@@ -130,10 +181,26 @@ ${specificInstructions && specificInstructions.trim() ? specificInstructions : "
       }
 
       const data = await response.json();
-      const reply = data.choices?.[0]?.message?.content?.trim();
+      const rawContent = data.choices?.[0]?.message?.content?.trim();
 
-      if (reply) {
-        return reply;
+      if (rawContent) {
+        try {
+          const parsed = JSON.parse(rawContent) as AiReplyResult;
+          if (parsed && typeof parsed.replyMessage === "string") {
+            return {
+              replyMessage: parsed.replyMessage.trim(),
+              needsHuman: Boolean(parsed.needsHuman),
+              reason: parsed.reason || "",
+            };
+          }
+        } catch {
+          // Fallback si no parsea
+          return {
+            replyMessage: rawContent,
+            needsHuman: false,
+            reason: "Respuesta en texto directo",
+          };
+        }
       }
     } catch (err: any) {
       lastError = err;

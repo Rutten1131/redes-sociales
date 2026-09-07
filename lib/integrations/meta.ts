@@ -497,8 +497,8 @@ export async function getInstagramRecentComments(params: {
 }): Promise<FetchedPostComments[]> {
   const { igUserId, accessToken, mediaLimit = 5, commentLimit = 15 } = params;
 
-  // 1. Obtener los últimos medios de la cuenta de IG
-  const mediaUrl = `${GRAPH_URL}/${igUserId}/media?fields=id,comments.limit(${commentLimit}){id,text,timestamp,username,from}&limit=${mediaLimit}&access_token=${accessToken}`;
+  // 1. Obtener los últimos medios de la cuenta de IG con su caption
+  const mediaUrl = `${GRAPH_URL}/${igUserId}/media?fields=id,caption,comments.limit(${commentLimit}){id,text,timestamp,username,from}&limit=${mediaLimit}&access_token=${accessToken}`;
   const res = await fetch(mediaUrl);
   if (!res.ok) {
     const errText = await res.text();
@@ -530,6 +530,7 @@ export async function getInstagramRecentComments(params: {
       }
       results.push({
         postId: media.id,
+        postMessage: media.caption || "Publicación de Instagram",
         comments,
       });
     }

@@ -28,6 +28,10 @@ export async function GET(req: NextRequest) {
       aiTone: true,
       autoReplyDMs: true,
       autoReplyComments: true,
+      copyPromptInstagram: true,
+      copyPromptFacebook: true,
+      copyPromptLinkedIn: true,
+      copyPromptYouTube: true,
     },
   });
 
@@ -40,7 +44,7 @@ export async function GET(req: NextRequest) {
 
 /**
  * PATCH /api/businesses/ai-settings
- * Actualiza las instrucciones, tono y toggles de auto-respuesta.
+ * Actualiza las instrucciones, tono, toggles y prompts de copy por red.
  */
 export async function PATCH(req: NextRequest) {
   const session = await auth();
@@ -49,7 +53,19 @@ export async function PATCH(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { businessId, aiPrompt, aiDMsPrompt, aiCommentsPrompt, aiTone, autoReplyDMs, autoReplyComments } = body;
+  const {
+    businessId,
+    aiPrompt,
+    aiDMsPrompt,
+    aiCommentsPrompt,
+    aiTone,
+    autoReplyDMs,
+    autoReplyComments,
+    copyPromptInstagram,
+    copyPromptFacebook,
+    copyPromptLinkedIn,
+    copyPromptYouTube,
+  } = body;
 
   if (!businessId) {
     return NextResponse.json({ error: "businessId requerido" }, { status: 400 });
@@ -72,6 +88,10 @@ export async function PATCH(req: NextRequest) {
       aiTone: aiTone !== undefined ? aiTone : undefined,
       autoReplyDMs: autoReplyDMs !== undefined ? Boolean(autoReplyDMs) : undefined,
       autoReplyComments: autoReplyComments !== undefined ? Boolean(autoReplyComments) : undefined,
+      copyPromptInstagram: copyPromptInstagram !== undefined ? copyPromptInstagram : undefined,
+      copyPromptFacebook: copyPromptFacebook !== undefined ? copyPromptFacebook : undefined,
+      copyPromptLinkedIn: copyPromptLinkedIn !== undefined ? copyPromptLinkedIn : undefined,
+      copyPromptYouTube: copyPromptYouTube !== undefined ? copyPromptYouTube : undefined,
     },
     select: {
       id: true,
@@ -82,6 +102,10 @@ export async function PATCH(req: NextRequest) {
       aiTone: true,
       autoReplyDMs: true,
       autoReplyComments: true,
+      copyPromptInstagram: true,
+      copyPromptFacebook: true,
+      copyPromptLinkedIn: true,
+      copyPromptYouTube: true,
     },
   });
 

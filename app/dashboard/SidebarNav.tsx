@@ -37,33 +37,68 @@ export default function SidebarNav() {
           >
             Calendario
           </Link>
-          <Link
-            href={`/dashboard/${businessId}/inbox`}
-            className={`px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-              pathname.includes("/inbox") ? "bg-white/10" : "hover:bg-white/5"
-            }`}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-            Bandeja de entrada
-          </Link>
-          <Link
-            href={`/dashboard/${businessId}/ai-settings`}
-            className={`px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-              pathname.includes("/ai-settings") ? "bg-white/10" : "hover:bg-white/5"
-            }`}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400">
-              <path d="M12 8V4H8"/>
-              <rect width="16" height="12" x="4" y="8" rx="2"/>
-              <path d="M2 14h2"/>
-              <path d="M20 14h2"/>
-              <path d="M15 13v2"/>
-              <path d="M9 13v2"/>
-            </svg>
-            Auto-Respuesta IA
-          </Link>
+          <div className="my-2 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+            <span className="px-3 text-[11px] font-bold tracking-wider uppercase" style={{ color: "var(--text-muted)" }}>
+              Canales de Atención
+            </span>
+          </div>
+
+          {/* Sección Comentarios */}
+          <div className="flex flex-col gap-0.5 mb-1">
+            <Link
+              href={`/dashboard/${businessId}/inbox?type=COMMENT`}
+              className={`px-3 py-2 rounded-lg transition-colors flex items-center justify-between group ${
+                pathname.includes("/inbox") && typeof window !== "undefined" && window.location.search.includes("type=COMMENT")
+                  ? "bg-white/10"
+                  : pathname.includes("/inbox")
+                  ? "hover:bg-white/5"
+                  : "hover:bg-white/5"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">💬</span>
+                <span className="font-medium">Comentarios</span>
+              </div>
+              <span
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.location.href = `/dashboard/${businessId}/ai-settings?tab=comments`;
+                }}
+                title="Configurar Objetivo IA para Comentarios"
+                className="opacity-60 hover:opacity-100 hover:text-amber-400 p-1 transition-all"
+              >
+                ⚙️
+              </span>
+            </Link>
+          </div>
+
+          {/* Sección Mensajes Directos (DMs) */}
+          <div className="flex flex-col gap-0.5 mb-2">
+            <Link
+              href={`/dashboard/${businessId}/inbox?type=DM`}
+              className={`px-3 py-2 rounded-lg transition-colors flex items-center justify-between group ${
+                pathname.includes("/inbox") && typeof window !== "undefined" && window.location.search.includes("type=DM")
+                  ? "bg-white/10"
+                  : "hover:bg-white/5"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">✉️</span>
+                <span className="font-medium">Mensajes Directos (DMs)</span>
+              </div>
+              <span
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.location.href = `/dashboard/${businessId}/ai-settings?tab=dms`;
+                }}
+                title="Configurar Objetivo IA para DMs"
+                className="opacity-60 hover:opacity-100 hover:text-amber-400 p-1 transition-all"
+              >
+                ⚙️
+              </span>
+            </Link>
+          </div>
+
           <div className="h-px my-2" style={{ background: "var(--border)" }} />
         </>
       ) : null}
