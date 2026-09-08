@@ -93,7 +93,48 @@ export async function POST(req: NextRequest) {
   return new Response("OK", { status: 200 });
 }
 
-import { processInboxItemWithAi } from "@/lib/ai/auto-responder";
+/**
+ * Dispara el procesamiento de un InboxItem con IA.
+ * Usa una solicitud HTTP interna real en lugar de fire-and-forget para que
+ * Next.js no corte el proceso al enviar el 200 al webhook de Meta.
+ */
+async function triggerInboxProcessing(inboxItemId: string) {
+  const baseUrl = process.env.NEXTAUTH_URL || process.env.APP_URL || "http://localhost:3000";
+  const internalSecret = process.env.INTERNAL_API_SECRET;
+
+  if (!internalSecret) {
+    console.warn("[Webhook] INTERNAL_API_SECRET no configurada — procesando directamente (fallback)");
+    // Fallback: importar y llamar directamente (puede ser cortado por Next.js)
+    try {
+      const { processInboxItemWithAi } = await import("@/lib/ai/auto-responder");
+      await processInboxItemWithAi(inboxItemId);
+    } catch (err) {
+      console.error(`[Webhook Fallback AI Error for ${inboxItemId}]:`, err);
+    }
+    return;
+  }
+
+  try {
+    console.log(`[Webhook] Dispatching AI processing for inbox item: ${inboxItemId}`);
+    const response = await fetch(`${baseUrl}/api/internal/process-inbox`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": internalSecret,
+      },
+      body: JSON.stringify({ inboxItemId }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[Webhook] Internal process-inbox failed (${response.status}):`, errText);
+    } else {
+      console.log(`[Webhook] Internal process-inbox triggered successfully for ${inboxItemId}`);
+    }
+  } catch (err) {
+    console.error(`[Webhook] Error calling internal process-inbox for ${inboxItemId}:`, err);
+  }
+}
 
 // ---------- Handlers internos ----------
 
@@ -141,9 +182,9 @@ async function handleIncomingMessage(
       update: {},
     });
 
-    // Disparar procesamiento con IA en segundo plano
+    // Disparar procesamiento con IA vía endpoint interno (HTTP real, no fire-and-forget)
     if (item && item.status === "PENDING") {
-      processInboxItemWithAi(item.id).catch((aiErr) => {
+      triggerInboxProcessing(item.id).catch((aiErr) => {
         console.error(`[Webhook AI DM Error for ${item.id}]:`, aiErr);
       });
     }
@@ -199,9 +240,9 @@ async function handleIncomingComment(
       update: {},
     });
 
-    // Disparar procesamiento con IA en segundo plano
+    // Disparar procesamiento con IA vía endpoint interno (HTTP real, no fire-and-forget)
     if (item && item.status === "PENDING") {
-      processInboxItemWithAi(item.id).catch((aiErr) => {
+      triggerInboxProcessing(item.id).catch((aiErr) => {
         console.error(`[Webhook AI Comment Error for ${item.id}]:`, aiErr);
       });
     }
@@ -256,9 +297,9 @@ async function handleInstagramComment(
       update: {},
     });
 
-    // Disparar procesamiento con IA en segundo plano
+    // Disparar procesamiento con IA vía endpoint interno (HTTP real, no fire-and-forget)
     if (item && item.status === "PENDING") {
-      processInboxItemWithAi(item.id).catch((aiErr) => {
+      triggerInboxProcessing(item.id).catch((aiErr) => {
         console.error(`[Webhook AI IG Comment Error for ${item.id}]:`, aiErr);
       });
     }
