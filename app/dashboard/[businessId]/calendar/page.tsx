@@ -1,7 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
+
+// Helper para localStorage seguro
+function safeGetLocalStorage<T>(key: string, fallback: T): T {
+  try {
+    if (typeof window === "undefined") return fallback;
+    const stored = localStorage.getItem(key);
+    if (!stored) return fallback;
+    return JSON.parse(stored) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function safeSetLocalStorage(key: string, value: unknown): void {
+  try {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Silently fail if storage is full or unavailable
+  }
+}
 
 interface SocialAccount {
   id: string;
@@ -134,8 +155,11 @@ function CarouselPreview({ items }: { items: { url: string; type: "IMAGE" | "VID
 
 export default function CalendarPage() {
   const { businessId } = useParams<{ businessId: string }>();
+  const storageKey = `calendar-posts-${businessId}`;
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
-  const [posts, setPosts] = useState<ScheduledPost[]>([]);
+  const [posts, setPosts] = useState<ScheduledPost[]>(() =>
+    safeGetLocalStorage<ScheduledPost[]>(storageKey, [])
+  );
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
@@ -184,7 +208,7 @@ export default function CalendarPage() {
   // Day posts filter tab
   const [dayFilter, setDayFilter] = useState<"ALL" | "FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN">("ALL");
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     if (!businessId) return;
     setLoading(true);
     try {
@@ -195,18 +219,26 @@ export default function CalendarPage() {
       const accountsData = await accountsRes.json();
       const postsData = await postsRes.json();
       setAccounts(accountsData.accounts ?? []);
-      setPosts(postsData.posts ?? []);
+      const freshPosts = postsData.posts ?? [];
+      setPosts(freshPosts);
+      // Persistir en localStorage para que sobrevivan recargas
+      safeSetLocalStorage(storageKey, freshPosts);
     } catch (err) {
       console.error("Error loading data:", err);
+      // Si falla la carga, intentar usar los datos de localStorage
+      const cached = safeGetLocalStorage<ScheduledPost[]>(storageKey, []);
+      if (cached.length > 0) {
+        setPosts(cached);
+      }
     } finally {
       setLoading(false);
     }
-  }
+  }, [businessId, storageKey]);
 
   useEffect(() => {
     setMounted(true);
     loadData();
-  }, [businessId]);
+  }, [businessId, loadData]);
 
   // Set default preview tab when accounts or selected accounts change
   useEffect(() => {
@@ -375,39 +407,64 @@ export default function CalendarPage() {
           : ["INSTAGRAM", "FACEBOOK", "LINKEDIN", "YOUTUBE"]
       ));
 
-      const res = await fetch("/api/ai/generate-copys", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          businessId,
-          generalContext,
-          platforms: targetPlatforms,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Error al generar los copys.");
+      let res: Response;
+      try {
+        res = await fetch("/api/ai/generate-copys", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            businessId,
+            generalContext,
+            platforms: targetPlatforms,
+          }),
+        });
+      } catch (fetchErr) {
+        console.error("[handleGenerateCopys] fetch failed:", fetchErr);
+        setFormError("Error de conexión al generar copys. Verifica tu conexión a internet e intenta de nuevo.");
+        setGeneratingCopys(false);
+        return;
       }
 
-      if (data.copys) {
+      let data: Record<string, unknown>;
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        console.error("[handleGenerateCopys] JSON parse failed:", jsonErr);
+        setFormError("La respuesta del servidor no fue válida. Intenta de nuevo.");
+        setGeneratingCopys(false);
+        return;
+      }
+
+      if (!res.ok) {
+        const errorMsg = typeof data.error === "string" ? data.error : "Error al generar los copys.";
+        setFormError(errorMsg);
+        setGeneratingCopys(false);
+        return;
+      }
+
+      const copys = data.copys as Record<string, string> | undefined;
+      if (copys && typeof copys === "object") {
         setPlatformCaptions(prev => ({
           ...prev,
-          ...data.copys,
+          ...copys,
         }));
 
         // Si la pestaña actual tiene un copy generado, mantenerla o cambiar a la primera disponible
         if (targetPlatforms.length > 0 && !targetPlatforms.includes(activeCopyTab)) {
-          setActiveCopyTab(targetPlatforms[0] as any);
+          setActiveCopyTab(targetPlatforms[0] as typeof activeCopyTab);
         }
 
         // Si no había caption general, poner el de la pestaña activa como fallback
-        if (!caption && data.copys[activeCopyTab]) {
-          setCaption(data.copys[activeCopyTab]);
+        if (!caption && copys[activeCopyTab]) {
+          setCaption(copys[activeCopyTab]);
         }
+      } else {
+        setFormError("La IA no devolvió copys válidos. Intenta de nuevo.");
       }
-    } catch (err: any) {
-      setFormError(err.message || "Error al conectar con el asistente IA");
+    } catch (err: unknown) {
+      console.error("[handleGenerateCopys] Unexpected error:", err);
+      const message = err instanceof Error ? err.message : "Error inesperado al generar copys.";
+      setFormError(message);
     } finally {
       setGeneratingCopys(false);
     }
@@ -477,7 +534,8 @@ export default function CalendarPage() {
         LINKEDIN: "",
         YOUTUBE: "",
       });
-      loadData();
+      // Recargar y persistir los nuevos posts
+      await loadData();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Ocurrió un error inesperado");
     } finally {

@@ -107,7 +107,8 @@ export async function POST(req: NextRequest) {
       }
 
       // Buscar cuentas destino
-      let targetAccounts = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let targetAccounts: any[] = [];
       if (socialAccountIds && socialAccountIds.length > 0) {
         targetAccounts = await prisma.socialAccount.findMany({
           where: { id: { in: socialAccountIds } },

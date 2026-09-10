@@ -89,16 +89,20 @@ Por favor redacta el copy adaptado para cada una de las siguientes plataformas: 
 
     const modelsToTry = [
       "openai/gpt-oss-120b",
+      "openai/gpt-oss-20b",
       "groq/compound",
       "qwen/qwen3.6-27b",
-      "openai/gpt-oss-20b",
     ];
 
-    let lastError = null;
+    let lastError: Error | null = null;
     let rawContent = "";
 
     for (const model of modelsToTry) {
       try {
+        // Timeout de 30 segundos por modelo
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+
         const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
           headers: {
@@ -115,30 +119,43 @@ Por favor redacta el copy adaptado para cada una de las siguientes plataformas: 
             temperature: 0.6,
             max_tokens: 1800,
           }),
+          signal: controller.signal,
         });
 
+        clearTimeout(timeout);
+
         if (!groqRes.ok) {
-          const errText = await groqRes.text();
-          lastError = new Error(`Error de Groq API (${model}): ${errText}`);
+          const errText = await groqRes.text().catch(() => "Unknown error");
+          console.warn(`[generate-copys] Model ${model} failed (${groqRes.status}): ${errText.substring(0, 200)}`);
+          lastError = new Error(`Modelo ${model} no disponible (${groqRes.status})`);
           continue;
         }
 
         const data = await groqRes.json();
         rawContent = data.choices?.[0]?.message?.content?.trim() || "";
-        if (rawContent) break;
-      } catch (err: any) {
-        lastError = err;
+        if (rawContent) {
+          console.log(`[generate-copys] Success with model: ${model}`);
+          break;
+        }
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.warn(`[generate-copys] Model ${model} exception: ${errMsg}`);
+        lastError = err instanceof Error ? err : new Error(errMsg);
       }
     }
 
     if (!rawContent) {
-      throw lastError || new Error("No se pudo obtener respuesta de ningún modelo de IA.");
+      const errorMessage = lastError?.message || "No se pudo obtener respuesta de ningún modelo de IA.";
+      console.error("[generate-copys] All models failed:", errorMessage);
+      return NextResponse.json({ error: errorMessage }, { status: 502 });
     }
+
     let copysResult: Record<string, string> = {};
 
     try {
       copysResult = JSON.parse(rawContent);
     } catch {
+      // Si la IA no devolvió JSON válido, usar el texto raw para todas las plataformas
       copysResult = {
         INSTAGRAM: rawContent || generalContext,
         FACEBOOK: rawContent || generalContext,
@@ -148,8 +165,9 @@ Por favor redacta el copy adaptado para cada una de las siguientes plataformas: 
     }
 
     return NextResponse.json({ copys: copysResult });
-  } catch (error: any) {
-    console.error("[generate-copys error]:", error);
-    return NextResponse.json({ error: error.message || "Error al generar copys con IA" }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error al generar copys con IA";
+    console.error("[generate-copys error]:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  scraper-campanas:
+    build: .
+    container_name: scraper-campanas-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./PROSPECTOS_BD:/app/PROSPECTOS_BD
+      - ./recordings:/app/recordings
+      - ./logs:/app/logs
+      - ./campanas_config.json:/app/campanas_config.json
+      - ./deals.json:/app/deals.json
+      - ./deals_files:/app/deals_files
