@@ -3,26 +3,27 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
 export const DEFAULT_COPY_PROMPTS = {
-  INSTAGRAM: `### ESTRATEGIA INSTAGRAM:
+  INSTAGRAM: `### ESTRATEGIA INSTAGRAM (Máx 2,200 caracteres):
 - Primera línea: Gancho ultra-atractivo o pregunta intrigante que detenga el scroll.
 - Cuerpo: Conciso, dinámico, con espacios limpios entre párrafos y emojis bien colocados.
 - Final: Llamado a la acción claro (ej: "Comenta INFO para enviarte detalles", "Escríbenos al DM").
 - Bloque final: 5 a 10 hashtags estratégicos relevantes.`,
 
-  FACEBOOK: `### ESTRATEGIA FACEBOOK:
+  FACEBOOK: `### ESTRATEGIA FACEBOOK (Máx 2,000 caracteres recomendados):
 - Tono: Cercano, conversacional, empático y comunitario.
 - Cuerpo: Párrafos fáciles de leer que cuenten la historia o el beneficio directo.
 - Final: Invita a comentar, compartir o enviar un mensaje directo / WhatsApp con enlace claro.`,
 
-  LINKEDIN: `### ESTRATEGIA LINKEDIN:
+  LINKEDIN: `### ESTRATEGIA LINKEDIN (Límite post 3,000 caracteres | Título de video máx 100 caracteres):
+- IMPORTANTE: La primera línea debe ser un TÍTULO/GANCHO de MENOS DE 100 CARACTERES (para evitar errores en la API de LinkedIn si es video).
 - Tono: Profesional, reflexivo, enfocado en liderazgo, negocios, B2B y aprendizaje de alto valor.
-- Estructura: Gancho inicial fuerte -> Problema / Contexto -> Solución o lección aprendida -> Pregunta de debate o invitación al networking.
+- Estructura: Gancho inicial corto -> Problema / Contexto -> Solución o lección aprendida -> Pregunta de debate o invitación al networking.
 - Formato: Frases cortas con doble salto de línea para facilitar lectura en móvil. Sin exceso de emojis. Máximo 3 hashtags profesionales.`,
 
-  YOUTUBE: `### ESTRATEGIA YOUTUBE (Título y Descripción SEO):
-- Línea 1 (TÍTULO): Título llamativo optimizado para búsquedas y CTR (máximo 60-70 caracteres).
-- DESCRIPCIÓN:
-  * Resumen atractivo del contenido del video en 2 oraciones.
+  YOUTUBE: `### ESTRATEGIA YOUTUBE (REGLA ESTRICTA DE CARACTERES):
+- Línea 1 (TÍTULO OBLIGATORIO): EXACTAMENTE MENOS DE 90 CARACTERES. YouTube rechaza terminantemente títulos de más de 100 caracteres. Debe ser atractivo, conciso y con gancho SEO.
+- A partir de la línea 2 (DESCRIPCIÓN):
+  * Resumen del contenido en 2 oraciones.
   * Puntos clave tratados (bullets).
   * Llamado a suscribirse y enlaces de contacto (WhatsApp / Web).
   * 3 a 5 hashtags (#Shorts si aplica).`,
@@ -87,60 +88,95 @@ ${generalContext.trim()}
 """
 Por favor redacta el copy adaptado para cada una de las siguientes plataformas: ${platforms.join(", ")}.`;
 
-    const modelsToTry = [
-      "openai/gpt-oss-120b",
-      "openai/gpt-oss-20b",
-      "groq/compound",
-      "qwen/qwen3.6-27b",
-    ];
+    const deepseekKey = process.env.DEEPSEEK_API_KEY;
+    const groqKey = process.env.GROQ_API_KEY;
 
-    let lastError: Error | null = null;
     let rawContent = "";
+    let lastError: Error | null = null;
 
-    for (const model of modelsToTry) {
+    // 1. Intentar con DeepSeek como principal (consumo mínimo optimizado)
+    if (deepseekKey) {
       try {
-        // Timeout de 30 segundos por modelo
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 30000);
+        const timeout = setTimeout(() => controller.abort(), 20000);
 
-        const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        const dsRes = await fetch("https://api.deepseek.com/chat/completions", {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${apiKey}`,
+            "Authorization": `Bearer ${deepseekKey}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model,
+            model: "deepseek-chat",
             response_format: { type: "json_object" },
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt },
             ],
             temperature: 0.6,
-            max_tokens: 1800,
+            max_tokens: 1200, // Consumo optimizado y económico
           }),
           signal: controller.signal,
         });
 
         clearTimeout(timeout);
 
-        if (!groqRes.ok) {
-          const errText = await groqRes.text().catch(() => "Unknown error");
-          console.warn(`[generate-copys] Model ${model} failed (${groqRes.status}): ${errText.substring(0, 200)}`);
-          lastError = new Error(`Modelo ${model} no disponible (${groqRes.status})`);
-          continue;
+        if (dsRes.ok) {
+          const dsData = await dsRes.json();
+          rawContent = dsData.choices?.[0]?.message?.content?.trim() || "";
+          if (rawContent) {
+            console.log("[generate-copys] Success with DeepSeek (deepseek-chat)");
+          }
+        } else {
+          const errText = await dsRes.text().catch(() => "");
+          console.warn(`[generate-copys] DeepSeek failed (${dsRes.status}): ${errText.substring(0, 150)}`);
+          lastError = new Error(`DeepSeek (${dsRes.status})`);
         }
+      } catch (dsErr) {
+        console.warn("[generate-copys] DeepSeek error, switching to Groq fallback:", dsErr);
+      }
+    }
 
-        const data = await groqRes.json();
-        rawContent = data.choices?.[0]?.message?.content?.trim() || "";
-        if (rawContent) {
-          console.log(`[generate-copys] Success with model: ${model}`);
-          break;
+    // 2. Si DeepSeek no respondió, usar Groq como respaldo
+    if (!rawContent && groqKey) {
+      const groqModels = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"];
+      for (const model of groqModels) {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 20000);
+
+          const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${groqKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model,
+              response_format: { type: "json_object" },
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt },
+              ],
+              temperature: 0.6,
+              max_tokens: 1200,
+            }),
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeout);
+
+          if (groqRes.ok) {
+            const data = await groqRes.json();
+            rawContent = data.choices?.[0]?.message?.content?.trim() || "";
+            if (rawContent) {
+              console.log(`[generate-copys] Success with Groq fallback: ${model}`);
+              break;
+            }
+          }
+        } catch (groqErr) {
+          console.warn(`[generate-copys] Groq ${model} failed:`, groqErr);
         }
-      } catch (err: unknown) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        console.warn(`[generate-copys] Model ${model} exception: ${errMsg}`);
-        lastError = err instanceof Error ? err : new Error(errMsg);
       }
     }
 

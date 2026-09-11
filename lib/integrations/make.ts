@@ -34,6 +34,10 @@ export interface MakePostPayload {
   }>;
   post_media_category: 'image' | 'video' | 'carousel' | 'story';
   link_para_post?: string | null;
+  youtube_title?: string | null;
+  youtube_description?: string | null;
+  youtube_tags?: string[];
+  title?: string | null;
   platforms: string[];
   metadata?: Record<string, any>;
 }
@@ -149,10 +153,29 @@ export function formatPayloadForMake(params: {
   const firstPhotoUrl = photo_urls.length > 0 ? photo_urls[0] : null;
   const finalMediaUrl = isCarousel ? (firstPhotoUrl || mediaUrl || (mediaItems && mediaItems[0]?.url) || null) : (mediaUrl || (mediaItems && mediaItems.length > 0 ? mediaItems[0].url : null));
 
+  const cleanText = (caption || '').trim();
+  const lines = cleanText.split('\n');
+  const firstLine = lines[0] || cleanText;
+  const safeShortTitle = (firstLine.length > 95 ? firstLine.substring(0, 92) + '...' : firstLine) || 'Video';
+  const safeLinkedinTitle = (cleanText.length > 200 ? cleanText.substring(0, 197) + '...' : cleanText) || 'Video';
+
+  // Si hay más de una línea, la descripción de YouTube es a partir de la 2da línea (para no duplicar el título)
+  // Si solo hay una línea, se usa todo el texto
+  const remainingLines = lines.slice(1).join('\n').trim();
+  const youtubeDescription = remainingLines || cleanText;
+
+  // Extraer automáticamente hashtags del texto como etiquetas/tags para YouTube
+  const tagsMatched = cleanText.match(/#([a-zA-Z0-9_\u00C0-\u017F]+)/g) || [];
+  const youtubeTags = tagsMatched.map(t => t.replace('#', '')).slice(0, 15);
+
   return {
     version: '2.0',
     post_id: postId,
     text: caption || '',
+    title: safeLinkedinTitle,
+    youtube_title: safeShortTitle,
+    youtube_description: youtubeDescription,
+    youtube_tags: youtubeTags,
     media_url: finalMediaUrl,
     media_urls,
     photo_urls,

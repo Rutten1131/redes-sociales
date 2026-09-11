@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 
 // Helper para localStorage seguro
@@ -156,6 +156,9 @@ function CarouselPreview({ items }: { items: { url: string; type: "IMAGE" | "VID
 export default function CalendarPage() {
   const { businessId } = useParams<{ businessId: string }>();
   const storageKey = `calendar-posts-${businessId}`;
+  // Draft key persists uploaded media across reloads to avoid duplicate BunnyNet uploads
+  const draftKey = `calendar-draft-media-${businessId}`;
+
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
   const [posts, setPosts] = useState<ScheduledPost[]>(() =>
     safeGetLocalStorage<ScheduledPost[]>(storageKey, [])
@@ -175,21 +178,38 @@ export default function CalendarPage() {
 
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [postType, setPostType] = useState("FEED_POST");
-  const [mediaUrl, setMediaUrl] = useState("");
+
+  // --- Persistent media draft (survive page reloads) ---
+  const [mediaUrl, setMediaUrl] = useState<string>(() => {
+    const draft = safeGetLocalStorage<{ url: string; carousel: { url: string; type: "IMAGE" | "VIDEO" }[]; postType: string } | null>(draftKey, null);
+    return draft?.url ?? "";
+  });
+  const [carouselItems, setCarouselItems] = useState<{ url: string; type: "IMAGE" | "VIDEO" }[]>(() => {
+    const draft = safeGetLocalStorage<{ url: string; carousel: { url: string; type: "IMAGE" | "VIDEO" }[]; postType: string } | null>(draftKey, null);
+    return draft?.carousel ?? [];
+  });
+  // -----------------------------------------------------
+
   const [mediaFile, setMediaFile] = useState<File | null>(null);
-  const [carouselItems, setCarouselItems] = useState<{ url: string; type: "IMAGE" | "VIDEO" }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
-  const [caption, setCaption] = useState("");
+  // Draft key for copys persistence
+  const copyDraftKey = `calendar-draft-copys-${businessId}`;
+
+  const [caption, setCaption] = useState<string>(() => {
+    const d = safeGetLocalStorage<{ caption: string; generalContext: string; platformCaptions: Record<string, string> } | null>(copyDraftKey, null);
+    return d?.caption ?? "";
+  });
   const [scheduledTime, setScheduledTime] = useState("12:00");
 
   // Adaptive social copies state
-  const [generalContext, setGeneralContext] = useState("");
-  const [platformCaptions, setPlatformCaptions] = useState<Record<string, string>>({
-    INSTAGRAM: "",
-    FACEBOOK: "",
-    LINKEDIN: "",
-    YOUTUBE: "",
+  const [generalContext, setGeneralContext] = useState<string>(() => {
+    const d = safeGetLocalStorage<{ caption: string; generalContext: string; platformCaptions: Record<string, string> } | null>(copyDraftKey, null);
+    return d?.generalContext ?? "";
+  });
+  const [platformCaptions, setPlatformCaptions] = useState<Record<string, string>>(() => {
+    const d = safeGetLocalStorage<{ caption: string; generalContext: string; platformCaptions: Record<string, string> } | null>(copyDraftKey, null);
+    return d?.platformCaptions ?? { INSTAGRAM: "", FACEBOOK: "", LINKEDIN: "", YOUTUBE: "" };
   });
   const [generatingCopys, setGeneratingCopys] = useState(false);
   const [activeCopyTab, setActiveCopyTab] = useState<"INSTAGRAM" | "FACEBOOK" | "LINKEDIN" | "YOUTUBE">("INSTAGRAM");
@@ -263,13 +283,36 @@ export default function CalendarPage() {
     }
   }, [postType, accounts]);
 
-  // Reset media type state when postType changes
+  // Persist media draft to localStorage whenever mediaUrl or carouselItems change
   useEffect(() => {
-    setMediaUrl("");
-    setMediaFile(null);
-    setCarouselItems([]);
-    setUploadProgress("");
+    if (mediaUrl || carouselItems.length > 0) {
+      safeSetLocalStorage(draftKey, { url: mediaUrl, carousel: carouselItems, postType });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaUrl, carouselItems]);
+
+  // Reset media state when postType changes (but NOT on initial mount)
+  const prevPostTypeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevPostTypeRef.current !== null && prevPostTypeRef.current !== postType) {
+      setMediaUrl("");
+      setMediaFile(null);
+      setCarouselItems([]);
+      setUploadProgress("");
+      safeSetLocalStorage(draftKey, null);
+    }
+    prevPostTypeRef.current = postType;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postType]);
+
+  // Persist copy draft (context + platform copys + caption) whenever any changes
+  useEffect(() => {
+    const hasContent = caption || generalContext || Object.values(platformCaptions).some(v => v);
+    if (hasContent) {
+      safeSetLocalStorage(copyDraftKey, { caption, generalContext, platformCaptions });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caption, generalContext, platformCaptions]);
 
   // Get days in month
   const getDaysInMonth = (year: number, month: number) => {
@@ -534,6 +577,9 @@ export default function CalendarPage() {
         LINKEDIN: "",
         YOUTUBE: "",
       });
+      // Limpiar los borradores persistidos (media y copys)
+      safeSetLocalStorage(draftKey, null);
+      safeSetLocalStorage(copyDraftKey, null);
       // Recargar y persistir los nuevos posts
       await loadData();
     } catch (err) {
@@ -613,9 +659,14 @@ export default function CalendarPage() {
   }));
 
   // Highlight selected tab in mockup preview
-  const activePreviewAccount = accounts.find(
+  const foundAccount = accounts.find(
     a => a.platform === previewTab && (selectedAccountIds.length === 0 || selectedAccountIds.includes(a.id))
-  ) || accounts.find(a => a.platform === previewTab) || { displayName: "Tu Cuenta", avatarUrl: null };
+  ) || accounts.find(a => a.platform === previewTab);
+
+  const activePreviewAccount = {
+    displayName: (foundAccount?.displayName && foundAccount.displayName.trim()) ? foundAccount.displayName : "Tu Cuenta",
+    avatarUrl: foundAccount?.avatarUrl || null,
+  };
 
   const selectedDayPosts = getPostsForDate(selectedDate);
 
@@ -822,6 +873,31 @@ export default function CalendarPage() {
               <label className="text-sm font-medium text-gray-300 block">
                 {postType === "CAROUSEL" ? "Agregar archivo multimedia al carrusel:" : "Archivo multimedia:"}
               </label>
+
+              {/* Draft recovery notice */}
+              {(mediaUrl || carouselItems.length > 0) && !uploading && (
+                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/30 text-xs text-blue-300">
+                  <span>
+                    📁 {postType === "CAROUSEL"
+                      ? `${carouselItems.length} archivo(s) recuperado(s) del borrador anterior`
+                      : "Archivo recuperado del borrador anterior — ya está subido a BunnyNet"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMediaUrl("");
+                      setMediaFile(null);
+                      setCarouselItems([]);
+                      setUploadProgress("");
+                      safeSetLocalStorage(draftKey, null);
+                    }}
+                    className="ml-3 text-red-400 hover:text-red-300 font-semibold whitespace-nowrap transition-colors"
+                  >
+                    ✕ Descartar
+                  </button>
+                </div>
+              )}
+
               <label
                 className="card p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors border-dashed border-2 border-white/10 rounded-lg"
               >
@@ -846,8 +922,9 @@ export default function CalendarPage() {
                   </div>
                 ) : mediaUrl ? (
                   <div className="text-center">
-                    <p className="text-sm text-green-400 font-medium">{uploadProgress}</p>
+                    <p className="text-sm text-green-400 font-medium">{uploadProgress || "✓ Archivo listo"}</p>
                     <p className="text-xs text-gray-400 mt-1 truncate max-w-xs">{mediaUrl}</p>
+                    <p className="text-xs text-gray-500 mt-1">Haz clic para reemplazarlo</p>
                   </div>
                 ) : (
                   <div className="text-center">
@@ -858,30 +935,53 @@ export default function CalendarPage() {
               </label>
             </div>
 
+
             {/* Contexto General y Copys Adaptativos con IA */}
             <div className="space-y-3 bg-[#16161a] border border-white/10 p-3.5 rounded-xl">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-gray-200 flex items-center gap-1.5">
                   <span>💡</span> Contexto General de la Publicación:
                 </label>
-                <button
-                  type="button"
-                  onClick={handleGenerateCopys}
-                  disabled={generatingCopys || !generalContext.trim()}
-                  className="px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
-                >
-                  {generatingCopys ? (
-                    <>
-                      <div className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-                      <span>Redactando copys con IA...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>✨</span>
-                      <span>Generar Copys con IA</span>
-                    </>
+                <div className="flex items-center gap-2">
+                  {(generalContext.trim() || Object.values(platformCaptions).some(v => v.trim())) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGeneralContext("");
+                        setPlatformCaptions({
+                          INSTAGRAM: "",
+                          FACEBOOK: "",
+                          LINKEDIN: "",
+                          YOUTUBE: "",
+                        });
+                        setCaption("");
+                        safeSetLocalStorage(copyDraftKey, null);
+                      }}
+                      className="px-2 py-1 text-xs text-gray-400 hover:text-red-400 transition-colors"
+                      title="Limpiar contexto y copys guardados"
+                    >
+                      Limpiar
+                    </button>
                   )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleGenerateCopys}
+                    disabled={generatingCopys || !generalContext.trim()}
+                    className="px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+                  >
+                    {generatingCopys ? (
+                      <>
+                        <div className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                        <span>Redactando copys con IA...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>✨</span>
+                        <span>Generar Copys con IA</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <textarea
@@ -937,6 +1037,26 @@ export default function CalendarPage() {
 
                 {/* Editor del copy de la red activa */}
                 <div className="relative">
+                  {/* Badge de advertencia de límites específicos por red */}
+                  <div className="flex items-center justify-between mb-1.5 px-0.5">
+                    <span className="text-[10px] font-medium text-gray-400">
+                      {activeCopyTab === "INSTAGRAM" && "📸 Límite recomendado: 2,200 caracteres (con hashtags)"}
+                      {activeCopyTab === "FACEBOOK" && "👥 Límite recomendado: 2,000 caracteres"}
+                      {activeCopyTab === "LINKEDIN" && "💼 Regla: Título de video máx 100-200 caracteres | Post máx 3,000"}
+                      {activeCopyTab === "YOUTUBE" && "▶️ Regla estricta: Línea 1 (Título) máx 100 caracteres | Descripción máx 5,000"}
+                    </span>
+                    {activeCopyTab === "YOUTUBE" && (
+                      <span className="text-[9px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-mono">
+                        1ª línea = Título (≤ 95 chars)
+                      </span>
+                    )}
+                    {activeCopyTab === "LINKEDIN" && (
+                      <span className="text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-mono">
+                        1ª línea = Título video
+                      </span>
+                    )}
+                  </div>
+
                   <textarea
                     placeholder={`Copy específico adaptado para ${activeCopyTab} (o déjalo vacío para usar la descripción general)...`}
                     value={platformCaptions[activeCopyTab] ?? ""}
@@ -957,9 +1077,29 @@ export default function CalendarPage() {
                       {activeCopyTab === "INSTAGRAM" && "Optimizador: Gancho inicial, emojis, CTA y hashtags"}
                       {activeCopyTab === "FACEBOOK" && "Optimizador: Cercano, conversacional, invitando a comentar"}
                       {activeCopyTab === "LINKEDIN" && "Optimizador: Profesional, networking, lecciones B2B"}
-                      {activeCopyTab === "YOUTUBE" && "Optimizador: Título SEO sugerido + Descripción estructurada"}
+                      {activeCopyTab === "YOUTUBE" && "Optimizador: 1ª Línea Título SEO + luego Descripción"}
                     </span>
-                    <span>{(platformCaptions[activeCopyTab] || "").length} caracteres</span>
+                    <span className="font-mono">
+                      {activeCopyTab === "YOUTUBE" ? (
+                        <>
+                          <span className={`${((platformCaptions[activeCopyTab] || "").split("\n")[0] || "").length > 95 ? "text-red-400 font-bold" : "text-emerald-400"}`}>
+                            Título: {((platformCaptions[activeCopyTab] || "").split("\n")[0] || "").length}/95
+                          </span>
+                          {" • "}
+                          <span>Total: {(platformCaptions[activeCopyTab] || "").length}</span>
+                        </>
+                      ) : activeCopyTab === "LINKEDIN" ? (
+                        <>
+                          <span className={`${((platformCaptions[activeCopyTab] || "").split("\n")[0] || "").length > 200 ? "text-amber-400" : "text-gray-400"}`}>
+                            Título: {((platformCaptions[activeCopyTab] || "").split("\n")[0] || "").length}/200
+                          </span>
+                          {" • "}
+                          <span>Total: {(platformCaptions[activeCopyTab] || "").length}</span>
+                        </>
+                      ) : (
+                        <span>{(platformCaptions[activeCopyTab] || "").length} caracteres</span>
+                      )}
+                    </span>
                   </div>
                 </div>
               </div>
