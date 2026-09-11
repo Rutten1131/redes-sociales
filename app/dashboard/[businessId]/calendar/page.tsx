@@ -396,32 +396,76 @@ export default function CalendarPage() {
     if (!files || files.length === 0) return;
     setFormError(null);
     setUploading(true);
-    setUploadProgress("Subiendo archivo a BunnyCDN…");
 
     try {
       const singleFile = files[0];
-      const formData = new FormData();
-      formData.append("file", singleFile);
+      const isVideo = singleFile.type.startsWith("video") || singleFile.name.endsWith(".mp4") || singleFile.name.endsWith(".mov");
+      const isLargeFile = singleFile.size > 4 * 1024 * 1024; // > 4MB
 
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
+      let publicUrl: string;
 
-      if (!res.ok) {
+      if (isVideo || isLargeFile) {
+        // --- UPLOAD DIRECTO A BUNNYCDN (bypass Vercel 4.5MB limit) ---
+        setUploadProgress("Preparando subida directa a BunnyCDN…");
+
+        // 1. Get signed upload credentials from our lightweight API
+        const signRes = await fetch("/api/upload/sign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileName: singleFile.name }),
+        });
+
+        if (!signRes.ok) {
+          const signData = await signRes.json();
+          throw new Error(signData.error ?? "Error al preparar la subida");
+        }
+
+        const { uploadUrl, publicUrl: cdnUrl, apiKey } = await signRes.json();
+
+        // 2. Upload file directly from client to BunnyCDN Storage
+        setUploadProgress(`Subiendo ${isVideo ? "video" : "archivo"} directamente a BunnyCDN (${(singleFile.size / (1024 * 1024)).toFixed(1)} MB)…`);
+
+        const uploadRes = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: {
+            AccessKey: apiKey,
+            "Content-Type": "application/octet-stream",
+          },
+          body: singleFile,
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error(`Error al subir a BunnyCDN: ${uploadRes.status}`);
+        }
+
+        publicUrl = cdnUrl;
+      } else {
+        // --- UPLOAD VÍA API (archivos pequeños < 4MB) ---
+        setUploadProgress("Subiendo archivo a BunnyCDN…");
+
+        const formData = new FormData();
+        formData.append("file", singleFile);
+
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error ?? "Error al subir archivo");
+        }
+
         const data = await res.json();
-        throw new Error(data.error ?? "Error al subir archivo");
+        publicUrl = data.url;
       }
 
-      const data = await res.json();
-      const isVideo = singleFile.type.startsWith("video") || singleFile.name.endsWith(".mp4") || singleFile.name.endsWith(".mov");
-
       if (postType === "CAROUSEL") {
-        setCarouselItems([...carouselItems, { url: data.url, type: isVideo ? "VIDEO" : "IMAGE" }]);
+        setCarouselItems([...carouselItems, { url: publicUrl, type: isVideo ? "VIDEO" : "IMAGE" }]);
         setUploadProgress(`✓ Subido slide ${carouselItems.length + 1} con éxito`);
       } else {
         setMediaFile(singleFile);
-        setMediaUrl(data.url);
+        setMediaUrl(publicUrl);
         setUploadProgress(`✓ Subido con éxito`);
       }
     } catch (err) {
@@ -628,12 +672,35 @@ export default function CalendarPage() {
     if (!file) return;
     setEditUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      if (!res.ok) throw new Error("Error al subir archivo");
-      const data = await res.json();
-      setEditMediaUrl(data.url);
+      const isVideo = file.type.startsWith("video") || file.name.endsWith(".mp4") || file.name.endsWith(".mov");
+      const isLargeFile = file.size > 4 * 1024 * 1024;
+
+      if (isVideo || isLargeFile) {
+        // Upload directo a BunnyCDN (bypass Vercel 4.5MB limit)
+        const signRes = await fetch("/api/upload/sign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileName: file.name }),
+        });
+        if (!signRes.ok) throw new Error("Error al preparar la subida");
+        const { uploadUrl, publicUrl, apiKey } = await signRes.json();
+
+        const uploadRes = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: { AccessKey: apiKey, "Content-Type": "application/octet-stream" },
+          body: file,
+        });
+        if (!uploadRes.ok) throw new Error(`Error al subir a BunnyCDN: ${uploadRes.status}`);
+        setEditMediaUrl(publicUrl);
+      } else {
+        // Upload vía API (archivos pequeños)
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch("/api/upload", { method: "POST", body: formData });
+        if (!res.ok) throw new Error("Error al subir archivo");
+        const data = await res.json();
+        setEditMediaUrl(data.url);
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : "Error al subir archivo");
     } finally {
