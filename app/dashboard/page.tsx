@@ -12,6 +12,7 @@ export default function BusinessesPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function load() {
     const res = await fetch("/api/businesses");
@@ -31,6 +32,32 @@ export default function BusinessesPage() {
     });
     setName("");
     load();
+  }
+
+  async function deleteBusiness(e: React.MouseEvent, id: string, businessName: string) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm(`¿Estás seguro de eliminar el negocio "${businessName}"? Esto desconectará sus cuentas vinculadas.`)) {
+      return;
+    }
+
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/businesses/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || "No se pudo eliminar el negocio");
+        return;
+      }
+      load();
+    } catch {
+      alert("Error al conectar con el servidor");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -55,16 +82,30 @@ export default function BusinessesPage() {
       ) : (
         <div className="space-y-2">
           {businesses.map((b) => (
-            <Link
+            <div
               key={b.id}
-              href={`/dashboard/${b.id}/connect`}
-              className="card p-4 flex justify-between items-center block hover:bg-white/5"
+              className="card p-4 flex justify-between items-center hover:bg-white/5 transition-colors group"
             >
-              <span className="text-sm font-medium">{b.name}</span>
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                {b._count.socialAccounts} cuenta(s) conectada(s)
-              </span>
-            </Link>
+              <Link
+                href={`/dashboard/${b.id}/connect`}
+                className="flex-1 flex justify-between items-center pr-4"
+              >
+                <div>
+                  <span className="text-sm font-medium block">{b.name}</span>
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    {b._count.socialAccounts} cuenta(s) conectada(s)
+                  </span>
+                </div>
+              </Link>
+              <button
+                onClick={(e) => deleteBusiness(e, b.id, b.name)}
+                disabled={deletingId === b.id}
+                title="Eliminar este negocio"
+                className="text-xs px-2.5 py-1.5 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/60 transition-all opacity-80 group-hover:opacity-100 disabled:opacity-30"
+              >
+                {deletingId === b.id ? "Eliminando..." : "🗑️ Eliminar"}
+              </button>
+            </div>
           ))}
         </div>
       )}

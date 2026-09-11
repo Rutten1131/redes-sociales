@@ -11,20 +11,31 @@ const { PrismaMariaDb } = require('./node_modules/@prisma/adapter-mariadb');
 const adapter = new PrismaMariaDb(dbUrl);
 const prisma = new PrismaClient({ adapter });
 
-async function checkBusiness() {
-  const item = await prisma.inboxItem.findUnique({
-    where: { id: 'cmtp2laly000f04ju76j97cxz' },
+const cryptoMod = require('crypto');
+
+function decrypt(cipherText, keyBase64) {
+  const buf = Buffer.from(keyBase64, 'base64');
+  const [ivB64, authTagB64, dataB64] = cipherText.split(':');
+  const iv = Buffer.from(ivB64, 'base64');
+  const authTag = Buffer.from(authTagB64, 'base64');
+  const data = Buffer.from(dataB64, 'base64');
+  const decipher = cryptoMod.createDecipheriv('aes-256-gcm', buf, iv);
+  decipher.setTag ? decipher.setTag(authTag) : decipher.setAuthTag(authTag);
+  return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
+}
+
+async function listAllBusinesses() {
+  const businesses = await prisma.business.findMany({
     include: {
-      socialAccount: {
-        include: {
-          business: true
-        }
-      }
+      socialAccounts: { select: { id: true, platform: true, displayName: true } },
+      _count: { select: { socialAccounts: true } }
     }
   });
-  console.log("Business name:", item.socialAccount.business.name);
-  console.log("Business autoReplyComments:", item.socialAccount.business.autoReplyComments);
-  console.log("Business autoReplyDMs:", item.socialAccount.business.autoReplyDMs);
-  console.log("Item Type:", item.type);
+  console.log("NEGOCIOS ACTUALES:", JSON.stringify(businesses.map(b => ({
+    id: b.id,
+    name: b.name,
+    accountsCount: b._count.socialAccounts,
+    accounts: b.socialAccounts.map(a => `${a.platform} (${a.displayName})`)
+  })), null, 2));
 }
-checkBusiness().finally(() => prisma.$disconnect());
+listAllBusinesses().finally(() => prisma.$disconnect());
