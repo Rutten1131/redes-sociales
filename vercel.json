@@ -1,12 +1,4 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/publish",
-      "schedule": "0 12 * * *"
-    },
-    {
-      "path": "/api/cron/sync-inbox",
-      "schedule": "0 0 * * *"
-    }
-  ]
+  "crons": []
 }
+

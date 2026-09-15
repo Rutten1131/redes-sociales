@@ -48,20 +48,19 @@ export async function GET(req: NextRequest) {
             commentLimit: 15,
           });
 
+          // Obtener los IDs externos ya existentes en la BD para esta cuenta de una sola consulta
+          const existingExternalIds = new Set(
+            (await prisma.inboxItem.findMany({
+              where: { socialAccountId: account.id },
+              select: { externalId: true },
+            })).map((i) => i.externalId)
+          );
+
           for (const post of postsWithComments) {
             for (const comment of post.comments) {
-              const existing = await prisma.inboxItem.findUnique({
-                where: {
-                  socialAccountId_externalId: {
-                    socialAccountId: account.id,
-                    externalId: comment.id,
-                  },
-                },
-              });
-
               const commentDate = comment.created_time ? new Date(comment.created_time) : new Date();
 
-              if (!existing) {
+              if (!existingExternalIds.has(comment.id)) {
                 const newItem = await prisma.inboxItem.create({
                   data: {
                     socialAccountId: account.id,
@@ -77,21 +76,13 @@ export async function GET(req: NextRequest) {
                   },
                 });
 
+                existingExternalIds.add(comment.id);
                 totalCommentsSaved++;
 
                 processInboxItemWithAi(newItem.id).catch((err) => {
                   console.error(`[Cron Sync FB Comment AI Error ${newItem.id}]:`, err);
                 });
               } else {
-                await prisma.inboxItem.update({
-                  where: { id: existing.id },
-                  data: {
-                    fromName: comment.from?.name || existing.fromName,
-                    fromExternalId: comment.from?.id || existing.fromExternalId,
-                    parentId: post.postId || existing.parentId,
-                    createdAt: commentDate,
-                  },
-                });
                 totalSkipped++;
               }
             }
@@ -107,16 +98,7 @@ export async function GET(req: NextRequest) {
             });
 
             for (const dm of fbDMs) {
-              const existing = await prisma.inboxItem.findUnique({
-                where: {
-                  socialAccountId_externalId: {
-                    socialAccountId: account.id,
-                    externalId: dm.id,
-                  },
-                },
-              });
-
-              if (!existing) {
+              if (!existingExternalIds.has(dm.id)) {
                 const dmDate = dm.created_time ? new Date(dm.created_time) : new Date();
                 const newItem = await prisma.inboxItem.create({
                   data: {
@@ -133,6 +115,7 @@ export async function GET(req: NextRequest) {
                   },
                 });
 
+                existingExternalIds.add(dm.id);
                 totalDMsSaved++;
 
                 processInboxItemWithAi(newItem.id).catch((err) => {
@@ -146,6 +129,14 @@ export async function GET(req: NextRequest) {
             console.warn(`[Cron Sync FB DMs Warning ${account.displayName}]:`, dmErr.message);
           }
         } else if (account.platform === "INSTAGRAM") {
+          // Obtener los IDs externos ya existentes en la BD para esta cuenta de Instagram
+          const existingExternalIds = new Set(
+            (await prisma.inboxItem.findMany({
+              where: { socialAccountId: account.id },
+              select: { externalId: true },
+            })).map((i) => i.externalId)
+          );
+
           const mediaWithComments = await getInstagramRecentComments({
             igUserId: account.externalId,
             accessToken: decryptedToken,
@@ -155,18 +146,9 @@ export async function GET(req: NextRequest) {
 
           for (const media of mediaWithComments) {
             for (const comment of media.comments) {
-              const existing = await prisma.inboxItem.findUnique({
-                where: {
-                  socialAccountId_externalId: {
-                    socialAccountId: account.id,
-                    externalId: comment.id,
-                  },
-                },
-              });
-
               const commentDate = comment.created_time ? new Date(comment.created_time) : new Date();
 
-              if (!existing) {
+              if (!existingExternalIds.has(comment.id)) {
                 const newItem = await prisma.inboxItem.create({
                   data: {
                     socialAccountId: account.id,
@@ -182,21 +164,13 @@ export async function GET(req: NextRequest) {
                   },
                 });
 
+                existingExternalIds.add(comment.id);
                 totalCommentsSaved++;
 
                 processInboxItemWithAi(newItem.id).catch((err) => {
                   console.error(`[Cron Sync IG Comment AI Error ${newItem.id}]:`, err);
                 });
               } else {
-                await prisma.inboxItem.update({
-                  where: { id: existing.id },
-                  data: {
-                    fromName: comment.from?.name || existing.fromName,
-                    fromExternalId: comment.from?.id || existing.fromExternalId,
-                    parentId: media.postId || existing.parentId,
-                    createdAt: commentDate,
-                  },
-                });
                 totalSkipped++;
               }
             }
@@ -223,16 +197,7 @@ export async function GET(req: NextRequest) {
               });
 
               for (const dm of igDMs) {
-                const existing = await prisma.inboxItem.findUnique({
-                  where: {
-                    socialAccountId_externalId: {
-                      socialAccountId: account.id,
-                      externalId: dm.id,
-                    },
-                  },
-                });
-
-                if (!existing) {
+                if (!existingExternalIds.has(dm.id)) {
                   const dmDate = dm.created_time ? new Date(dm.created_time) : new Date();
                   const newItem = await prisma.inboxItem.create({
                     data: {
@@ -249,6 +214,7 @@ export async function GET(req: NextRequest) {
                     },
                   });
 
+                  existingExternalIds.add(dm.id);
                   totalDMsSaved++;
 
                   processInboxItemWithAi(newItem.id).catch((err) => {
