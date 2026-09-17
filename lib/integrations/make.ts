@@ -197,8 +197,20 @@ export function formatPayloadForMake(params: {
 /**
  * Envía la carga de publicación al Webhook configurado en Make.com
  */
-export async function sendToMakeWebhook(payload: MakePostPayload): Promise<{ success: boolean; data?: any; error?: string }> {
-  const webhookUrl = process.env.MAKE_WEBHOOK_URL;
+export async function sendToMakeWebhook(
+  payload: MakePostPayload,
+  businessInfo?: { id?: string; name?: string }
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  // Resolver webhook de publicación según el cliente/negocio
+  let webhookUrl = process.env.MAKE_WEBHOOK_URL;
+  const nameNorm = (businessInfo?.name || "").toLowerCase();
+
+  if (nameNorm.includes("aroma") || businessInfo?.id === "cmu605zv0000004l6m4zaexri") {
+    webhookUrl = process.env.MAKE_WEBHOOK_URL_AROMA || webhookUrl;
+  } else if (nameNorm.includes("cesar") || businessInfo?.id === "cmrp6bdxz000304kzi6c9a467") {
+    webhookUrl = process.env.MAKE_WEBHOOK_URL_CESAR || webhookUrl;
+  }
+
   if (!webhookUrl) {
     throw new Error("MAKE_WEBHOOK_URL no está configurada en las variables de entorno.");
   }

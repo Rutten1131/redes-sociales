@@ -19,8 +19,27 @@ export interface MakeInboxReplyPayload {
   externalId: string;
   fromExternalId: string;
   replyMessage: string;
+  businessId?: string;
+  businessName?: string;
   accessToken?: string;
   pageAccessToken?: string;
+}
+
+/**
+ * Resuelve el webhook de Make adecuado según el cliente/negocio.
+ */
+function resolveWebhookUrl(businessId?: string, businessName?: string): string {
+  const nameNorm = (businessName || "").toLowerCase();
+  
+  if (nameNorm.includes("aroma") || businessId === "cmu605zv0000004l6m4zaexri") {
+    return process.env.MAKE_INBOX_REPLY_WEBHOOK_URL_AROMA || process.env.MAKE_INBOX_REPLY_WEBHOOK_URL || "";
+  }
+  
+  if (nameNorm.includes("cesar") || businessId === "cmrp6bdxz000304kzi6c9a467") {
+    return process.env.MAKE_INBOX_REPLY_WEBHOOK_URL_CESAR || process.env.MAKE_INBOX_REPLY_WEBHOOK_URL || "";
+  }
+
+  return process.env.MAKE_INBOX_REPLY_WEBHOOK_URL || "";
 }
 
 /**
@@ -30,11 +49,11 @@ export interface MakeInboxReplyPayload {
 export async function dispatchReplyViaMake(
   payload: MakeInboxReplyPayload
 ): Promise<void> {
-  const webhookUrl = process.env.MAKE_INBOX_REPLY_WEBHOOK_URL;
+  const webhookUrl = resolveWebhookUrl(payload.businessId, payload.businessName);
 
   if (!webhookUrl) {
     throw new Error(
-      "MAKE_INBOX_REPLY_WEBHOOK_URL no está configurada en las variables de entorno."
+      "No hay webhook de Make configurado para este negocio."
     );
   }
 

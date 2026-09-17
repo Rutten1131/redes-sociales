@@ -145,6 +145,8 @@ export async function processInboxItemWithAi(inboxItemId: string): Promise<{
         externalId: item.externalId,
         fromExternalId: item.fromExternalId || "",
         replyMessage: replyMessage,
+        businessId: business.id,
+        businessName: business.name,
         accessToken,
         pageAccessToken: accessToken,
       });

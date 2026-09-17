@@ -54,6 +54,8 @@ export async function POST(req: NextRequest) {
         externalId: item.externalId,
         fromExternalId: item.fromExternalId || "",
         replyMessage: message.trim(),
+        businessId: item.socialAccount.business.id,
+        businessName: item.socialAccount.business.name,
         accessToken,
         pageAccessToken: accessToken,
       });

@@ -21,7 +21,10 @@ export async function GET(req: NextRequest) {
 
   const duePosts = await prisma.scheduledPost.findMany({
     where: { status: "SCHEDULED", scheduledAt: { lte: new Date() } },
-    include: { socialAccount: true, mediaItems: { orderBy: { order: "asc" } } },
+    include: {
+      socialAccount: { include: { business: true } },
+      mediaItems: { orderBy: { order: "asc" } }
+    },
     take: 20, // procesa en lotes para no saturar
   });
 
@@ -72,7 +75,11 @@ async function publishToPlatform(
       mediaUrl: post!.mediaUrl,
       mediaItems: post!.mediaItems,
     });
-    const makeRes = await sendToMakeWebhook(makePayload);
+    const business = (post as any).socialAccount?.business;
+    const makeRes = await sendToMakeWebhook(makePayload, {
+      id: business?.id,
+      name: business?.name,
+    });
     if (!makeRes.success) {
       throw new Error(`Error en puente de Make.com: ${makeRes.error}`);
     }
