@@ -104,11 +104,11 @@ const FORMAT_INFO: Record<string, { label: string; badge: string; info: string; 
     adaptNote: "Se publica como carrusel deslizable en Instagram, Facebook y LinkedIn.",
   },
   TIKTOK_VIDEO: {
-    label: "Video TikTok 🎵 (100% Automático)",
+    label: "Video TikTok 🎵",
     badge: "TikTok",
     info: "Video vertical para TikTok. Se publica automáticamente en tu cuenta a la hora programada.",
     platforms: ["TIKTOK"],
-    adaptNote: "Publicación automática desatendida mediante Playwright y tus cookies.",
+    adaptNote: "Publicación automática desatendida con tus cookies vinculadas.",
   },
 };
 

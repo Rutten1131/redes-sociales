@@ -402,11 +402,6 @@ export default function ConnectPage() {
                     <p className="text-sm font-medium">{acc.displayName}</p>
                     <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                       {meta.label}
-                      {isTikTok && (
-                        <span className="font-semibold" style={{ color: "#00f2fe" }}>
-                          {" "}· Modo 100% Automático (Playwright)
-                        </span>
-                      )}
                       {expiringSoon && (
                         <span style={{ color: "var(--warning)" }}> · token vence pronto</span>
                       )}
