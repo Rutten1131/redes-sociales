@@ -27,6 +27,12 @@ export const DEFAULT_COPY_PROMPTS = {
   * Puntos clave tratados (bullets).
   * Llamado a suscribirse y enlaces de contacto (WhatsApp / Web).
   * 3 a 5 hashtags (#Shorts si aplica).`,
+
+  TIKTOK: `### ESTRATEGIA TIKTOK (Máx 2,200 caracteres | Recomendado directo y dinámico):
+- Primera línea: Gancho magnético con emojis que despierte curiosidad inmediata en los primeros 3 segundos.
+- Cuerpo: Breve, dinámico, enfocado en el valor rápido o la intriga del video.
+- Pregunta final: Para incentivar comentarios y debate en la comunidad.
+- Hashtags: 4 a 6 hashtags de tendencia y nicho (ej: #fyp #viral #emprendimiento).`,
 };
 
 export async function POST(req: NextRequest) {
@@ -41,7 +47,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { businessId, generalContext, platforms = ["INSTAGRAM", "FACEBOOK", "LINKEDIN", "YOUTUBE"], customPrompts = {} } = body;
+  const { businessId, generalContext, platforms = ["INSTAGRAM", "FACEBOOK", "LINKEDIN", "YOUTUBE", "TIKTOK"], customPrompts = {} } = body;
 
   if (!businessId || !generalContext?.trim()) {
     return NextResponse.json({ error: "businessId y generalContext son requeridos" }, { status: 400 });
@@ -61,6 +67,7 @@ export async function POST(req: NextRequest) {
     const promptFB = customPrompts.FACEBOOK || business.copyPromptFacebook || DEFAULT_COPY_PROMPTS.FACEBOOK;
     const promptLI = customPrompts.LINKEDIN || business.copyPromptLinkedIn || DEFAULT_COPY_PROMPTS.LINKEDIN;
     const promptYT = customPrompts.YOUTUBE || business.copyPromptYouTube || DEFAULT_COPY_PROMPTS.YOUTUBE;
+    const promptTT = customPrompts.TIKTOK || DEFAULT_COPY_PROMPTS.TIKTOK;
 
     const knowledgeBase = business.aiPrompt?.trim() || "";
 
@@ -75,6 +82,7 @@ ${platforms.includes("INSTAGRAM") ? `\n[INSTAGRAM]\n${promptIG}` : ""}
 ${platforms.includes("FACEBOOK") ? `\n[FACEBOOK]\n${promptFB}` : ""}
 ${platforms.includes("LINKEDIN") ? `\n[LINKEDIN]\n${promptLI}` : ""}
 ${platforms.includes("YOUTUBE") ? `\n[YOUTUBE]\n${promptYT}` : ""}
+${platforms.includes("TIKTOK") ? `\n[TIKTOK]\n${promptTT}` : ""}
 
 ### 📦 FORMATO OBLIGATORIO DE RESPUESTA:
 Debes responder SIEMPRE con un objeto JSON válido donde las claves sean exactamente las plataformas solicitadas (${platforms.join(", ")}) y los valores sean los copys completos listos para publicar:

@@ -14,6 +14,7 @@ enum Platform {
   INSTAGRAM
   YOUTUBE
   LINKEDIN
+  TIKTOK
 }
 
 enum PostType {
@@ -23,6 +24,7 @@ enum PostType {
   VIDEO // YouTube
   SHORT // YouTube Shorts
   CAROUSEL
+  TIKTOK_VIDEO // TikTok (flujo semimanual)
 }
 
 enum PostStatus {
@@ -31,6 +33,7 @@ enum PostStatus {
   PUBLISHING
   PUBLISHED
   FAILED
+  PENDING_TIKTOK // Video listo en sistema, esperando que el usuario lo publique manualmente en TikTok
 }
 
 model User {
@@ -143,6 +146,7 @@ model ScheduledPost {
   publishedAt     DateTime?
 
   mediaItems      MediaItem[]
+  tiktokNotification TikTokNotification?
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -162,4 +166,19 @@ model MediaItem {
 enum MediaType {
   IMAGE
   VIDEO
+}
+
+// Registro de notificaciones TikTok para el flujo semimanual
+// Cuando un post TikTok llega a su hora, se crea esta notificación
+// y el usuario la ve en su dashboard para publicar manualmente.
+model TikTokNotification {
+  id        String        @id @default(cuid())
+  postId    String        @unique
+  post      ScheduledPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  status    String        @default("PENDING") // PENDING | DONE
+  doneAt    DateTime?
+
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 }

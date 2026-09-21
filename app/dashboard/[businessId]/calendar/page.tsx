@@ -26,7 +26,7 @@ function safeSetLocalStorage(key: string, value: unknown): void {
 
 interface SocialAccount {
   id: string;
-  platform: "FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN";
+  platform: "FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN" | "TIKTOK";
   displayName: string;
   avatarUrl: string | null;
 }
@@ -40,12 +40,12 @@ interface MediaItem {
 
 interface ScheduledPost {
   id: string;
-  platform: "FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN";
+  platform: "FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN" | "TIKTOK";
   type: string;
   caption: string | null;
   mediaUrl: string;
   scheduledAt: string;
-  status: "DRAFT" | "SCHEDULED" | "PUBLISHING" | "PUBLISHED" | "FAILED";
+  status: "DRAFT" | "SCHEDULED" | "PUBLISHING" | "PUBLISHED" | "FAILED" | "PENDING_TIKTOK";
   errorMessage: string | null;
   socialAccount: { displayName: string; avatarUrl: string | null };
   mediaItems?: MediaItem[];
@@ -57,6 +57,7 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
   PUBLISHED: { label: "Publicado", color: "var(--success)" },
   FAILED: { label: "Falló", color: "var(--danger)" },
   DRAFT: { label: "Borrador", color: "var(--text-muted)" },
+  PENDING_TIKTOK: { label: "Pendiente TikTok 🎵", color: "#ff0050" },
 };
 
 const MONTHS = [
@@ -82,11 +83,11 @@ const FORMAT_INFO: Record<string, { label: string; badge: string; info: string; 
     adaptNote: "Se sube como video estándar a YouTube, LinkedIn, Facebook e Instagram.",
   },
   REEL: {
-    label: "Reel / Short (Vertical 9:16)",
-    badge: "FB • IG • YouTube • LinkedIn",
+    label: "Reel / Short / TikTok (Vertical 9:16)",
+    badge: "FB • IG • YouTube • LinkedIn • TikTok",
     info: "Video vertical para máximo alcance y viralidad.",
-    platforms: ["FACEBOOK", "INSTAGRAM", "YOUTUBE", "LINKEDIN"],
-    adaptNote: "Se publica como Reel en Instagram/Facebook, Short en YouTube y Video en LinkedIn.",
+    platforms: ["FACEBOOK", "INSTAGRAM", "YOUTUBE", "LINKEDIN", "TIKTOK"],
+    adaptNote: "Se publica como Reel en Instagram/Facebook, Short en YouTube, Video en LinkedIn y Video en TikTok.",
   },
   STORY: {
     label: "Historia (24 hrs)",
@@ -101,6 +102,13 @@ const FORMAT_INFO: Record<string, { label: string; badge: string; info: string; 
     info: "Secuencia deslizable de múltiples elementos.",
     platforms: ["FACEBOOK", "INSTAGRAM", "LINKEDIN"],
     adaptNote: "Se publica como carrusel deslizable en Instagram, Facebook y LinkedIn.",
+  },
+  TIKTOK_VIDEO: {
+    label: "Video TikTok 🎵 (100% Automático)",
+    badge: "TikTok",
+    info: "Video vertical para TikTok. Se publica automáticamente en tu cuenta a la hora programada.",
+    platforms: ["TIKTOK"],
+    adaptNote: "Publicación automática desatendida mediante Playwright y tus cookies.",
   },
 };
 
@@ -209,10 +217,10 @@ export default function CalendarPage() {
   });
   const [platformCaptions, setPlatformCaptions] = useState<Record<string, string>>(() => {
     const d = safeGetLocalStorage<{ caption: string; generalContext: string; platformCaptions: Record<string, string> } | null>(copyDraftKey, null);
-    return d?.platformCaptions ?? { INSTAGRAM: "", FACEBOOK: "", LINKEDIN: "", YOUTUBE: "" };
+    return d?.platformCaptions ?? { INSTAGRAM: "", FACEBOOK: "", LINKEDIN: "", YOUTUBE: "", TIKTOK: "" };
   });
   const [generatingCopys, setGeneratingCopys] = useState(false);
-  const [activeCopyTab, setActiveCopyTab] = useState<"INSTAGRAM" | "FACEBOOK" | "LINKEDIN" | "YOUTUBE">("INSTAGRAM");
+  const [activeCopyTab, setActiveCopyTab] = useState<"INSTAGRAM" | "FACEBOOK" | "LINKEDIN" | "YOUTUBE" | "TIKTOK">("INSTAGRAM");
 
   // Editing state
   const [editingPost, setEditingPost] = useState<ScheduledPost | null>(null);
@@ -223,10 +231,10 @@ export default function CalendarPage() {
   const [editUploading, setEditUploading] = useState(false);
 
   // Preview tab state
-  const [previewTab, setPreviewTab] = useState<"FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN">("FACEBOOK");
+  const [previewTab, setPreviewTab] = useState<"FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN" | "TIKTOK">("FACEBOOK");
 
   // Day posts filter tab
-  const [dayFilter, setDayFilter] = useState<"ALL" | "FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN">("ALL");
+  const [dayFilter, setDayFilter] = useState<"ALL" | "FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN" | "TIKTOK">("ALL");
 
   const loadData = useCallback(async () => {
     if (!businessId) return;
@@ -620,6 +628,7 @@ export default function CalendarPage() {
         FACEBOOK: "",
         LINKEDIN: "",
         YOUTUBE: "",
+        TIKTOK: "",
       });
       // Limpiar los borradores persistidos (media y copys)
       safeSetLocalStorage(draftKey, null);
@@ -1076,6 +1085,7 @@ export default function CalendarPage() {
                     { key: "FACEBOOK" as const, label: "Facebook", icon: "👥" },
                     { key: "LINKEDIN" as const, label: "LinkedIn", icon: "💼" },
                     { key: "YOUTUBE" as const, label: "YouTube", icon: "▶️" },
+                    { key: "TIKTOK" as const, label: "TikTok", icon: "🎵" },
                   ].map(tab => {
                     const hasCustomCopy = !!platformCaptions[tab.key]?.trim();
                     return (
@@ -1111,6 +1121,7 @@ export default function CalendarPage() {
                       {activeCopyTab === "FACEBOOK" && "👥 Límite recomendado: 2,000 caracteres"}
                       {activeCopyTab === "LINKEDIN" && "💼 Regla: Título de video máx 100-200 caracteres | Post máx 3,000"}
                       {activeCopyTab === "YOUTUBE" && "▶️ Regla estricta: Línea 1 (Título) máx 100 caracteres | Descripción máx 5,000"}
+                      {activeCopyTab === "TIKTOK" && "🎵 Límite: 2,200 caracteres (con hashtags #fyp, etc.)"}
                     </span>
                     {activeCopyTab === "YOUTUBE" && (
                       <span className="text-[9px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-mono">
@@ -1205,6 +1216,7 @@ export default function CalendarPage() {
               {[
                 { key: "FACEBOOK" as const, label: "Facebook", border: "border-blue-500" },
                 { key: "INSTAGRAM" as const, label: "Instagram", border: "border-pink-500" },
+                { key: "TIKTOK" as const, label: "TikTok", border: "border-cyan-400" },
                 { key: "YOUTUBE" as const, label: "YouTube", border: "border-red-500" },
                 { key: "LINKEDIN" as const, label: "LinkedIn", border: "border-blue-400" },
               ].map(tab => (
@@ -1270,6 +1282,61 @@ export default function CalendarPage() {
                         {platformCaptions.INSTAGRAM || caption}
                       </span>
                     </p>
+                  </div>
+                </div>
+              )}
+
+              {/* TIKTOK PREVIEW */}
+              {previewTab === "TIKTOK" && (
+                <div className="w-full max-w-[280px] bg-black rounded-2xl border border-white/15 overflow-hidden shadow-2xl relative aspect-[9/16] flex flex-col justify-between p-3 text-white">
+                  {/* Top Bar Mock */}
+                  <div className="flex items-center justify-center gap-4 text-xs font-semibold text-white/80 pt-1 z-10">
+                    <span className="text-white border-b-2 border-white pb-0.5">Para ti</span>
+                  </div>
+
+                  {/* Media in background */}
+                  <div className="absolute inset-0 z-0 bg-neutral-900 flex items-center justify-center">
+                    <CarouselPreview items={previewMediaItems} />
+                  </div>
+
+                  {/* Side Actions Overlay */}
+                  <div className="relative z-10 self-end flex flex-col items-center gap-3 mr-1 mb-14 text-white">
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-cyan-400 to-rose-500 p-[1.5px] relative">
+                      <div className="w-full h-full bg-black rounded-full flex items-center justify-center text-[11px] font-bold">
+                        {activePreviewAccount.displayName[0] || "T"}
+                      </div>
+                      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-rose-500 text-[9px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">
+                        +
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-lg">❤️</span>
+                      <span className="text-[10px] font-semibold">12.5k</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-lg">💬</span>
+                      <span className="text-[10px] font-semibold">324</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-lg">🔖</span>
+                      <span className="text-[10px] font-semibold">1.2k</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-lg">↗️</span>
+                      <span className="text-[10px] font-semibold">Share</span>
+                    </div>
+                  </div>
+
+                  {/* Bottom Caption & User Overlay */}
+                  <div className="relative z-10 bg-gradient-to-t from-black/90 via-black/40 to-transparent -mx-3 -mb-3 p-3 pt-6">
+                    <p className="font-bold text-xs mb-1">@{activePreviewAccount.displayName.replace(/^@/, "")}</p>
+                    <p className="text-[11px] text-white/95 line-clamp-3 leading-tight mb-2">
+                      {platformCaptions.TIKTOK || caption || "Escribe una descripción para tu video..."}
+                    </p>
+                    <div className="flex items-center gap-1.5 text-[10px] text-white/80">
+                      <span>🎵</span>
+                      <span className="truncate">Sonido original - @{activePreviewAccount.displayName.replace(/^@/, "")}</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1407,6 +1474,7 @@ export default function CalendarPage() {
                       if (post.platform === "INSTAGRAM") dotColor = "bg-pink-500";
                       if (post.platform === "YOUTUBE") dotColor = "bg-red-500";
                       if (post.platform === "LINKEDIN") dotColor = "bg-sky-500";
+                      if (post.platform === "TIKTOK") dotColor = "bg-rose-500";
                       return (
                         <span
                           key={post.id}
@@ -1457,6 +1525,7 @@ export default function CalendarPage() {
             { key: "INSTAGRAM" as const, label: "Instagram", color: "text-pink-400" },
             { key: "YOUTUBE" as const, label: "YouTube", color: "text-red-400" },
             { key: "LINKEDIN" as const, label: "LinkedIn", color: "text-sky-400" },
+            { key: "TIKTOK" as const, label: "TikTok", color: "text-rose-400" },
           ].map(tab => {
             const count = tab.key === "ALL"
               ? selectedDayPosts.length
@@ -1602,6 +1671,27 @@ export default function CalendarPage() {
                         <div className="aspect-video w-full rounded-md bg-black/40 overflow-hidden flex items-center justify-center border border-white/5">
                           <CarouselPreview items={carouselMedias} />
                         </div>
+                      </div>
+                    )}
+
+                    {/* TIKTOK Layout */}
+                    {post.platform === "TIKTOK" && (
+                      <div className="text-white text-xs space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-gradient-to-r from-cyan-400 to-rose-500 flex items-center justify-center font-bold text-[10px] uppercase text-black">
+                            🎵
+                          </div>
+                          <div>
+                            <p className="font-semibold text-[11px]">@{post.socialAccount.displayName.replace(/^@/, "")}</p>
+                            <p className="text-[9px] text-emerald-400 font-medium">TikTok 100% Automático</p>
+                          </div>
+                        </div>
+                        <div className="aspect-[9/16] max-h-56 w-full rounded-md bg-black/60 overflow-hidden flex items-center justify-center border border-rose-500/20 mx-auto">
+                          <CarouselPreview items={carouselMedias} />
+                        </div>
+                        <p className="whitespace-pre-wrap text-gray-200 line-clamp-2 text-[11px]">
+                          {post.caption || "Sin descripción"}
+                        </p>
                       </div>
                     )}
 

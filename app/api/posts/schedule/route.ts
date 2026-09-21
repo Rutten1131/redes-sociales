@@ -11,7 +11,7 @@ const mediaItemSchema = z.object({
 
 const schema = z.object({
   socialAccountIds: z.array(z.string()).min(1),
-  type: z.enum(["FEED_POST", "REEL", "STORY", "VIDEO", "SHORT", "CAROUSEL", "VIDEO_NORMAL"]),
+  type: z.enum(["FEED_POST", "REEL", "STORY", "VIDEO", "SHORT", "CAROUSEL", "VIDEO_NORMAL", "TIKTOK_VIDEO"]),
   caption: z.string().optional(),
   platformCaptions: z.record(z.string(), z.string()).optional(), // mapa de copys específicos por red social
   mediaUrl: z.string().url().optional(),       // opcional para CAROUSEL
@@ -64,11 +64,13 @@ export async function POST(req: NextRequest) {
 
     // Validar que los formatos de video contengan un archivo de video
     const isVideo = (mediaUrl || "").toLowerCase().match(/\.(mp4|mov|avi|mkv|webm|3gp|wmv)($|\?)/) !== null;
-    if ((type === "VIDEO_NORMAL" || type === "REEL") && !isVideo) {
+    if ((type === "VIDEO_NORMAL" || type === "REEL" || type === "TIKTOK_VIDEO") && !isVideo) {
       return NextResponse.json({ error: "Este formato requiere que subas un archivo de video." }, { status: 400 });
     }
 
-    if (account.platform === "YOUTUBE") {
+    if (account.platform === "TIKTOK") {
+      dbType = "TIKTOK_VIDEO";
+    } else if (account.platform === "YOUTUBE") {
       if (type === "VIDEO_NORMAL") {
         dbType = "VIDEO";
       } else if (type === "REEL") {
