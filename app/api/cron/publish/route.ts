@@ -47,58 +47,16 @@ export async function GET(req: NextRequest) {
     });
     if (claimed.count === 0) continue; // ya lo estaba procesando otra ejecución
 
-    // --- Publicación Automática TikTok con Cookies / Playwright ---
+    // --- TikTok se delega al Worker del VPS (Playwright) ---
+    // Vercel serverless no soporta navegadores Playwright.
+    // El worker independiente en el VPS procesará los posts de TikTok pendientes.
     if (post.platform === "TIKTOK") {
-      try {
-        let cookies: any[] = [];
-        try {
-          const decrypted = decryptToken(post.socialAccount.accessToken);
-          cookies = JSON.parse(decrypted);
-        } catch {
-          // Si el token no tiene JSON válido (por ejemplo, registro manual sin cookies)
-          cookies = [];
-        }
-
-        if (Array.isArray(cookies) && cookies.length > 0) {
-          // Import dinámico: Playwright solo carga cuando hay un post de TikTok real.
-          // Esto evita que playwright-core rompa el arranque en Vercel serverless.
-          const { publishTikTokVideo } = await import("@/lib/tiktok-publisher");
-          const result = await publishTikTokVideo({
-            cookies,
-            videoUrl: post.mediaUrl,
-            caption: post.caption,
-          });
-
-          if (!result.success) {
-            throw new Error(result.error || "Fallo en la publicación automática de TikTok");
-          }
-
-          await prisma.scheduledPost.update({
-            where: { id: post.id },
-            data: { status: "PUBLISHED", publishedAt: new Date() },
-          });
-          results.push({ id: post.id, status: "PUBLISHED" });
-        } else {
-          // Fallback a notificación si no se configuraron cookies aún
-          await prisma.scheduledPost.update({
-            where: { id: post.id },
-            data: { status: "PENDING_TIKTOK" },
-          });
-          await prisma.tikTokNotification.upsert({
-            where: { postId: post.id },
-            update: {},
-            create: { postId: post.id },
-          });
-          results.push({ id: post.id, status: "PENDING_TIKTOK" });
-        }
-      } catch (err: any) {
-        console.error(`Error publicando en TikTok para post ${post.id}:`, err);
-        await prisma.scheduledPost.update({
-          where: { id: post.id },
-          data: { status: "FAILED", errorMessage: String(err.message ?? err) },
-        });
-        results.push({ id: post.id, status: "FAILED", error: String(err.message ?? err) });
-      }
+      // Revertimos el estado de PROCESSING a SCHEDULED para que el VPS worker lo tome,
+      // o bien lo dejamos para que el VPS lo reclame directamente.
+      await prisma.scheduledPost.update({
+        where: { id: post.id },
+        data: { status: "SCHEDULED" },
+      });
       continue;
     }
 
