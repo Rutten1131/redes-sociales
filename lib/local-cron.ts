@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { decryptToken } from "@/lib/crypto";
-import { publishTikTokVideo } from "@/lib/tiktok-publisher";
 
 let isRunning = false;
 
@@ -41,6 +40,7 @@ export async function checkAndPublishDuePosts() {
           }
 
           if (Array.isArray(cookies) && cookies.length > 0) {
+            const { publishTikTokVideo } = await import("@/lib/tiktok-publisher");
             const result = await publishTikTokVideo({
               cookies,
               videoUrl: post.mediaUrl,
