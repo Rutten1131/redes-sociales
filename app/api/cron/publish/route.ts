@@ -5,7 +5,8 @@ import { publishFacebookPost, publishInstagramMedia, publishFacebookCarousel, pu
 import { refreshYoutubeToken, uploadYoutubeVideo } from "@/lib/integrations/youtube";
 import { publishLinkedInPost, publishLinkedInVideo } from "@/lib/integrations/linkedin";
 import { formatPayloadForMake, sendToMakeWebhook } from "@/lib/integrations/make";
-import { publishTikTokVideo } from "@/lib/tiktok-publisher";
+// publishTikTokVideo se importa dinámicamente solo cuando hay posts de TikTok,
+// para evitar que playwright-core crashee el arranque en Vercel serverless.
 
 /**
  * Este endpoint debe llamarse periódicamente (cada 5 min, por ejemplo) desde:
@@ -59,7 +60,9 @@ export async function GET(req: NextRequest) {
         }
 
         if (Array.isArray(cookies) && cookies.length > 0) {
-          // Publicación 100% Automática vía Playwright
+          // Import dinámico: Playwright solo carga cuando hay un post de TikTok real.
+          // Esto evita que playwright-core rompa el arranque en Vercel serverless.
+          const { publishTikTokVideo } = await import("@/lib/tiktok-publisher");
           const result = await publishTikTokVideo({
             cookies,
             videoUrl: post.mediaUrl,

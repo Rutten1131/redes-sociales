@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { encryptToken } from "@/lib/crypto";
-import { chromium } from "playwright";
+// playwright se importa dinámicamente para evitar que crashee Vercel serverless
 
 export const maxDuration = 300;
 
@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
   }
   let browser = null;
   try {
+    const { chromium } = await import("playwright");
     browser = await chromium.launch({
       headless: false,
       args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled", "--window-size=1000,750"],
