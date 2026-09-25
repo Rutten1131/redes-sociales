@@ -1,57 +1,71 @@
-const fs = require('fs');
+// Script para obtener el Page Access Token de Agenda Cultural Loja
+// Corre con: node scratch_check_unificado.js
 
-const unificado = {
-  name: "RRSS - Receptor Unificado Inbox (Comentarios FB + DMs Messenger)",
-  flow: [
-    {
-      id: 1,
-      module: "facebook-messenger:WatchMessages",
-      version: 1,
-      parameters: {
-        __IMTCONN__: 10746705
-      },
-      mapper: {
-        page: "275810677566214"
-      },
-      metadata: {
-        designer: { x: 0, y: 0, name: "Vigilar DMs Messenger" },
-        restore: {
-          parameters: {
-            __IMTCONN__: {
-              label: "My Facebook connection (Objetivo Cesar Reyes)",
-              data: { scoped: "true", connection: "facebook" }
-            }
-          }
-        }
-      }
-    },
-    {
-      id: 2,
-      module: "http:MakeRequest",
-      version: 4,
-      parameters: {
-        tlsType: "",
-        proxyKeychain: "",
-        authenticationType: "noAuth"
-      },
-      mapper: {
-        url: "https://redes-sociales-l5q4.vercel.app/api/webhooks/make-inbox",
-        method: "post",
-        headers: [
-          { key: "Content-Type", value: "application/json" }
-        ],
-        body: "{\n  \"platform\": \"FACEBOOK\",\n  \"type\": \"DM\",\n  \"externalId\": \"{{1.mid}}\",\n  \"fromName\": \"{{1.sender.name}}\",\n  \"fromExternalId\": \"{{1.sender.id}}\",\n  \"content\": \"{{1.message.text}}\",\n  \"accountExternalId\": \"275810677566214\"\n}",
-        parseResponse: true,
-        stopOnHttpError: true,
-        allowRedirects: true,
-        shareCookies: false,
-        requestCompressedContent: true
-      },
-      metadata: {
-        designer: { x: 300, y: 0, name: "Enviar DM al Inbox" }
-      }
+const crypto = require('crypto');
+const mysql = require('mariadb');
+require('dotenv').config();
+
+function decryptToken(cipherText) {
+  const key = Buffer.from(process.env.TOKEN_ENCRYPTION_KEY, 'base64');
+  const [ivB64, authTagB64, dataB64] = cipherText.split(':');
+  const iv = Buffer.from(ivB64, 'base64');
+  const authTag = Buffer.from(authTagB64, 'base64');
+  const data = Buffer.from(dataB64, 'base64');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(authTag);
+  const decrypted = Buffer.concat([decipher.update(data), decipher.final()]);
+  return decrypted.toString('utf8');
+}
+
+async function main() {
+  // Parsear DATABASE_URL manualmente para mariadb
+  const dbUrl = process.env.DATABASE_URL || '';
+  // mysql://user:pass@host:port/dbname
+  const match = dbUrl.match(/mysql:\/\/([^:]+):(.+)@([^:]+):(\d+)\/(.+)/);
+  if (!match) throw new Error('No se pudo parsear DATABASE_URL');
+  const [, user, passwordEncoded, host, port, database] = match;
+  const password = decodeURIComponent(passwordEncoded);
+
+  const conn = await mysql.createConnection({
+    host,
+    port: parseInt(port),
+    user,
+    password,
+    database,
+  });
+
+  const rows = await conn.query(`
+    SELECT sa.displayName, sa.platform, sa.accessToken, b.name as businessName
+    FROM SocialAccount sa
+    JOIN Business b ON sa.businessId = b.id
+    WHERE (LOWER(b.name) LIKE '%agenda%' OR LOWER(b.name) LIKE '%cultural%')
+      AND sa.platform = 'FACEBOOK'
+    LIMIT 5
+  `);
+
+  if (!rows.length) {
+    console.log('❌ No se encontró ninguna cuenta de Facebook para Agenda Cultural.');
+    console.log('   Asegúrate de haber conectado la página primero.');
+    await conn.end();
+    return;
+  }
+
+  for (const row of rows) {
+    try {
+      const token = decryptToken(row.accessToken);
+      console.log('\n==================================================');
+      console.log('✅ Negocio:', row.businessName);
+      console.log('📄 Página:', row.displayName);
+      console.log('🔑 Page Access Token (para Make.com):');
+      console.log(token);
+      console.log('==================================================\n');
+    } catch (e) {
+      console.error('Error descifrando token:', e.message);
     }
-  ]
-};
+  }
 
-console.log("Receptor listo.");
+  await conn.end();
+}
+
+main().catch(console.error);
+

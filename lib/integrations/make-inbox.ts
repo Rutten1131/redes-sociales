@@ -39,6 +39,10 @@ function resolveWebhookUrl(businessId?: string, businessName?: string): string {
     return process.env.MAKE_INBOX_REPLY_WEBHOOK_URL_CESAR || process.env.MAKE_INBOX_REPLY_WEBHOOK_URL || "";
   }
 
+  if (nameNorm.includes("agenda") || nameNorm.includes("cultural")) {
+    return process.env.MAKE_INBOX_REPLY_WEBHOOK_URL_AGENDA || process.env.MAKE_INBOX_REPLY_WEBHOOK_URL || "";
+  }
+
   return process.env.MAKE_INBOX_REPLY_WEBHOOK_URL || "";
 }
 

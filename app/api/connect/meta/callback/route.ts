@@ -49,8 +49,10 @@ export async function GET(req: NextRequest) {
 
     // 3. Descubrir páginas de Facebook + cuentas de Instagram vinculadas
     const pages = await discoverPages(userLongLivedToken);
+    console.log("[META CALLBACK] Páginas descubiertas por discoverPages:", JSON.stringify(pages, null, 2));
 
     if (pages.length === 0) {
+      console.warn("[META CALLBACK] No se encontraron páginas para este usuario de Meta.");
       return NextResponse.redirect(
         new URL(`${redirectBase}?error=no_pages_found`, appUrl)
       );

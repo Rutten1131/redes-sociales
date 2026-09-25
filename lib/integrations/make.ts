@@ -209,6 +209,8 @@ export async function sendToMakeWebhook(
     webhookUrl = process.env.MAKE_WEBHOOK_URL_AROMA || webhookUrl;
   } else if (nameNorm.includes("cesar") || businessInfo?.id === "cmrp6bdxz000304kzi6c9a467") {
     webhookUrl = process.env.MAKE_WEBHOOK_URL_CESAR || webhookUrl;
+  } else if (nameNorm.includes("agenda") || nameNorm.includes("cultural")) {
+    webhookUrl = process.env.MAKE_WEBHOOK_URL_AGENDA || webhookUrl;
   }
 
   if (!webhookUrl) {
