@@ -688,3 +688,218 @@ export async function getInstagramRecentDMs(params: {
 
   return allDMs;
 }
+
+// ---------- Métricas y Analíticas (Insights) ----------
+
+export interface StandardPostMetrics {
+  impressions: number;
+  reach: number;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  saved: number;
+  clicks: number;
+  watchTimeTotalSeconds: number;
+  avgWatchTimeSeconds: number;
+  retentionRate: number;
+  raw: any;
+}
+
+/**
+ * Obtiene métricas e interacciones de un post o video de Facebook
+ */
+export async function getFacebookPostAnalytics(params: {
+  externalPostId: string;
+  pageAccessToken: string;
+  isVideo?: boolean;
+}): Promise<StandardPostMetrics> {
+  const { externalPostId, pageAccessToken, isVideo } = params;
+
+  // 1. Obtener conteo base de likes, comments, shares
+  const summaryUrl = `${GRAPH_URL}/${externalPostId}?fields=shares,comments.summary(total_count),reactions.summary(total_count)&access_token=${pageAccessToken}`;
+  let baseData: any = {};
+  try {
+    const res = await fetch(summaryUrl);
+    if (res.ok) {
+      baseData = await res.json();
+    }
+  } catch (e) {
+    console.warn(`[getFacebookPostAnalytics] Error en conteo base:`, e);
+  }
+
+  const likes = baseData.reactions?.summary?.total_count || 0;
+  const comments = baseData.comments?.summary?.total_count || 0;
+  const shares = baseData.shares?.count || 0;
+
+  // 2. Obtener Insights (impresiones, alcance, clics, video views si aplica)
+  let impressions = 0;
+  let reach = 0;
+  let views = 0;
+  let clicks = 0;
+  let watchTimeTotalSeconds = 0;
+  let avgWatchTimeSeconds = 0;
+  let rawInsights: any = null;
+
+  try {
+    const postMetrics = isVideo
+      ? "post_impressions,post_impressions_unique,post_video_views,post_video_view_time,post_video_avg_time_watched,post_clicks"
+      : "post_impressions,post_impressions_unique,post_clicks";
+
+    const insightsUrl = `${GRAPH_URL}/${externalPostId}/insights?metric=${postMetrics}&access_token=${pageAccessToken}`;
+    const res = await fetch(insightsUrl);
+    if (res.ok) {
+      const data = await res.json();
+      rawInsights = data;
+
+      if (Array.isArray(data.data)) {
+        for (const item of data.data) {
+          const val = item.values?.[0]?.value;
+          if (val === undefined || val === null) continue;
+
+          switch (item.name) {
+            case "post_impressions":
+              impressions = typeof val === "number" ? val : 0;
+              break;
+            case "post_impressions_unique":
+              reach = typeof val === "number" ? val : 0;
+              break;
+            case "post_clicks":
+              clicks = typeof val === "number" ? val : 0;
+              break;
+            case "post_video_views":
+              views = typeof val === "number" ? val : 0;
+              break;
+            case "post_video_view_time":
+              // Meta devuelve esto en milisegundos
+              watchTimeTotalSeconds = Math.round(Number(val) / 1000);
+              break;
+            case "post_video_avg_time_watched":
+              // Meta devuelve esto en milisegundos
+              avgWatchTimeSeconds = Math.round((Number(val) / 1000) * 10) / 10;
+              break;
+          }
+        }
+      }
+    } else {
+      console.warn(`[getFacebookPostAnalytics] Insights warning:`, await res.text());
+    }
+  } catch (err) {
+    console.warn(`[getFacebookPostAnalytics] Error obteniendo insights:`, err);
+  }
+
+  return {
+    impressions,
+    reach,
+    views,
+    likes,
+    comments,
+    shares,
+    saved: 0,
+    clicks,
+    watchTimeTotalSeconds,
+    avgWatchTimeSeconds,
+    retentionRate: 0,
+    raw: { baseData, rawInsights },
+  };
+}
+
+/**
+ * Obtiene métricas e interacciones de un post/Reel/carrusel de Instagram
+ */
+export async function getInstagramMediaAnalytics(params: {
+  mediaId: string;
+  accessToken: string;
+  isReel?: boolean;
+}): Promise<StandardPostMetrics> {
+  const { mediaId, accessToken, isReel } = params;
+
+  // 1. Obtener conteo base de like_count, comments_count
+  const fields = "id,media_type,like_count,comments_count";
+  const baseRes = await fetch(`${GRAPH_URL}/${mediaId}?fields=${fields}&access_token=${accessToken}`);
+  let baseData: any = {};
+  if (baseRes.ok) {
+    baseData = await baseRes.json();
+  }
+
+  const likes = baseData.like_count || 0;
+  const comments = baseData.comments_count || 0;
+
+  // 2. Obtener Insights de Instagram Media
+  // Para reels: reach, plays, total_interactions, ig_reels_avg_watch_time, ig_reels_video_view_total_time, saved, shares
+  // Para posts/carruseles: reach, impressions, saved, shares, total_interactions
+  let impressions = 0;
+  let reach = 0;
+  let views = 0;
+  let shares = 0;
+  let saved = 0;
+  let watchTimeTotalSeconds = 0;
+  let avgWatchTimeSeconds = 0;
+  let rawInsights: any = null;
+
+  try {
+    const metricList = isReel
+      ? "reach,plays,total_interactions,saved,shares,ig_reels_avg_watch_time,ig_reels_video_view_total_time"
+      : "reach,impressions,saved,shares,total_interactions";
+
+    const insightsUrl = `${GRAPH_URL}/${mediaId}/insights?metric=${metricList}&access_token=${accessToken}`;
+    const res = await fetch(insightsUrl);
+    if (res.ok) {
+      const data = await res.json();
+      rawInsights = data;
+
+      if (Array.isArray(data.data)) {
+        for (const item of data.data) {
+          const val = item.values?.[0]?.value;
+          if (val === undefined || val === null) continue;
+
+          switch (item.name) {
+            case "impressions":
+              impressions = typeof val === "number" ? val : 0;
+              break;
+            case "reach":
+              reach = typeof val === "number" ? val : 0;
+              break;
+            case "plays":
+              views = typeof val === "number" ? val : 0;
+              break;
+            case "shares":
+              shares = typeof val === "number" ? val : 0;
+              break;
+            case "saved":
+              saved = typeof val === "number" ? val : 0;
+              break;
+            case "ig_reels_video_view_total_time":
+              // Viene en milisegundos
+              watchTimeTotalSeconds = Math.round(Number(val) / 1000);
+              break;
+            case "ig_reels_avg_watch_time":
+              // Viene en milisegundos
+              avgWatchTimeSeconds = Math.round((Number(val) / 1000) * 10) / 10;
+              break;
+          }
+        }
+      }
+    } else {
+      console.warn(`[getInstagramMediaAnalytics] Warning:`, await res.text());
+    }
+  } catch (err) {
+    console.warn(`[getInstagramMediaAnalytics] Error:`, err);
+  }
+
+  return {
+    impressions: impressions || views,
+    reach,
+    views,
+    likes,
+    comments,
+    shares,
+    saved,
+    clicks: 0,
+    watchTimeTotalSeconds,
+    avgWatchTimeSeconds,
+    retentionRate: 0,
+    raw: { baseData, rawInsights },
+  };
+}
+

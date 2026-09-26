@@ -147,11 +147,42 @@ model ScheduledPost {
 
   mediaItems      MediaItem[]
   tiktokNotification TikTokNotification?
+  analytics       PostAnalytics?
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   @@index([status, scheduledAt])
+}
+
+model PostAnalytics {
+  id              String        @id @default(cuid())
+  postId          String        @unique
+  post            ScheduledPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  // Métricas principales de alcance y reproducciones
+  impressions     Int           @default(0) // Total de visualizaciones/impresiones
+  reach           Int           @default(0) // Cuentas únicas alcanzadas
+  views           Int           @default(0) // Reproducciones de video
+  
+  // Métricas de interacción (Engagement)
+  likes           Int           @default(0)
+  comments        Int           @default(0)
+  shares          Int           @default(0) // Compartidos
+  saved           Int           @default(0) // Guardados (específico IG)
+  clicks          Int           @default(0) // Clics totales o de enlace
+
+  // Retención y consumo de Video
+  watchTimeTotalSeconds Int     @default(0) // Tiempo total visto en segundos
+  avgWatchTimeSeconds   Float   @default(0) // Tiempo promedio de retención en segundos
+  retentionRate         Float   @default(0) // Porcentaje promedio visto (0 - 100%)
+
+  // Raw data / detalles adicionales en JSON
+  rawMetrics      String?       @db.Text    // Para almacenar toda la respuesta de la API original
+
+  syncedAt        DateTime      @default(now())
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
 
 model MediaItem {
@@ -182,3 +213,4 @@ model TikTokNotification {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 }
+
