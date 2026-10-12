@@ -44,7 +44,7 @@ export async function processInboxItemWithAi(inboxItemId: string): Promise<{
     try {
       // Búsqueda flexible de post: exacta o por sufijo/prefijo (Facebook a veces antepone PAGE_ID_)
       const cleanParentId = item.parentId.includes("_") ? item.parentId.split("_").pop()! : item.parentId;
-      const localPost = await prisma.scheduledPost.findFirst({
+      let localPost = await prisma.scheduledPost.findFirst({
         where: {
           OR: [
             { externalPostId: item.parentId },
@@ -53,11 +53,42 @@ export async function processInboxItemWithAi(inboxItemId: string): Promise<{
           ],
         },
         select: {
+          id: true,
           caption: true,
           autoCommentReplyEnabled: true,
           autoCommentReplyText: true,
         },
       });
+
+      // Fallback para posts publicados vía Make (cuyo externalPostId es "make_id"):
+      // Si no hubo coincidencia directa de ID, buscamos el post publicado más reciente
+      // en esta misma cuenta social que tenga autoCommentReplyEnabled activo.
+      if (!localPost) {
+        const fallbackPost = await prisma.scheduledPost.findFirst({
+          where: {
+            socialAccountId: item.socialAccountId,
+            status: "PUBLISHED",
+            autoCommentReplyEnabled: true,
+          },
+          orderBy: { publishedAt: "desc" },
+          select: {
+            id: true,
+            caption: true,
+            autoCommentReplyEnabled: true,
+            autoCommentReplyText: true,
+          },
+        });
+
+        if (fallbackPost) {
+          localPost = fallbackPost;
+          console.log(`[Auto-Responder 🎯 MATCH MAKE] Post vinculado por cuenta social para item ${inboxItemId} (Post ID BD: ${fallbackPost.id})`);
+          // Enlazar de forma permanente el externalPostId real para futuras consultas y analíticas
+          prisma.scheduledPost.update({
+            where: { id: fallbackPost.id },
+            data: { externalPostId: item.parentId },
+          }).catch((err) => console.warn("[Auto-Responder] No se pudo actualizar externalPostId:", err));
+        }
+      }
 
       // JERARQUÍA NIVEL 1: Si el post tiene respuesta configurada propia
       if (localPost?.autoCommentReplyEnabled && localPost.autoCommentReplyText?.trim()) {
