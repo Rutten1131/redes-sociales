@@ -38,19 +38,75 @@ export async function processInboxItemWithAi(inboxItemId: string): Promise<{
     ? Boolean(business.autoReplyDMs)
     : Boolean(business.autoReplyComments);
 
-  // 1. Obtener contexto del Post original si es un COMENTARIO
+  // 1. Prioridad: Verificar si es un COMENTARIO y si el Post específico tiene auto-respuesta configurada
   let postCaption: string | null = null;
   if (!isDM && item.parentId) {
     try {
-      // Buscar primero si el post fue publicado desde nuestro publicador interno
+      // Búsqueda flexible de post: exacta o por sufijo/prefijo (Facebook a veces antepone PAGE_ID_)
+      const cleanParentId = item.parentId.includes("_") ? item.parentId.split("_").pop()! : item.parentId;
       const localPost = await prisma.scheduledPost.findFirst({
         where: {
-          externalPostId: item.parentId,
+          OR: [
+            { externalPostId: item.parentId },
+            { externalPostId: cleanParentId },
+            { externalPostId: { endsWith: cleanParentId } },
+          ],
         },
         select: {
           caption: true,
+          autoCommentReplyEnabled: true,
+          autoCommentReplyText: true,
         },
       });
+
+      // JERARQUÍA NIVEL 1: Si el post tiene respuesta configurada propia
+      if (localPost?.autoCommentReplyEnabled && localPost.autoCommentReplyText?.trim()) {
+        const replyText = localPost.autoCommentReplyText.trim();
+        console.log(`[Auto-Responder 🎯 POST RULE] Post ${item.parentId} tiene respuesta automática propia configurada.`);
+
+        // Marcamos de inmediato para evitar que otro cron intente procesar
+        await prisma.inboxItem.update({
+          where: { id: inboxItemId },
+          data: {
+            aiSuggestedReply: replyText,
+            aiReplied: true,
+            status: "ANSWERED",
+          },
+        });
+
+        // Retardo natural de 2 a 4 segundos
+        const delayMs = Math.floor(Math.random() * 2000) + 2000;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+        const accessToken = decryptToken(item.socialAccount.accessToken);
+        const makeWebhookUrl = process.env.MAKE_INBOX_REPLY_WEBHOOK_URL;
+
+        if (makeWebhookUrl) {
+          await dispatchReplyViaMake({
+            platform: item.platform,
+            type: item.type,
+            externalId: item.externalId,
+            fromExternalId: item.fromExternalId || "",
+            replyMessage: replyText,
+            businessId: business.id,
+            businessName: business.name,
+            accessToken,
+            pageAccessToken: accessToken,
+          });
+        } else {
+          await replyToComment({
+            commentId: item.externalId,
+            accessToken,
+            message: replyText,
+          });
+        }
+
+        console.log(`[Auto-Responder 🎯 POST RULE] Respondido exitosamente a comentario ${item.externalId} con la plantilla del post.`);
+        return {
+          repliedAutomatically: true,
+          replyText,
+        };
+      }
 
       if (localPost?.caption) {
         postCaption = localPost.caption;

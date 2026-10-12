@@ -49,6 +49,8 @@ interface ScheduledPost {
   errorMessage: string | null;
   socialAccount: { displayName: string; avatarUrl: string | null };
   mediaItems?: MediaItem[];
+  autoCommentReplyEnabled?: boolean;
+  autoCommentReplyText?: string | null;
 }
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
@@ -222,6 +224,10 @@ export default function CalendarPage() {
   const [generatingCopys, setGeneratingCopys] = useState(false);
   const [activeCopyTab, setActiveCopyTab] = useState<"INSTAGRAM" | "FACEBOOK" | "LINKEDIN" | "YOUTUBE" | "TIKTOK">("INSTAGRAM");
 
+  // Auto-respuesta a comentarios para este post específico
+  const [autoCommentReplyEnabled, setAutoCommentReplyEnabled] = useState(false);
+  const [autoCommentReplyText, setAutoCommentReplyText] = useState("");
+
   // Editing state
   const [editingPost, setEditingPost] = useState<ScheduledPost | null>(null);
   const [editCaption, setEditCaption] = useState("");
@@ -229,6 +235,8 @@ export default function CalendarPage() {
   const [editTime, setEditTime] = useState("");
   const [editMediaUrl, setEditMediaUrl] = useState("");
   const [editUploading, setEditUploading] = useState(false);
+  const [editAutoCommentReplyEnabled, setEditAutoCommentReplyEnabled] = useState(false);
+  const [editAutoCommentReplyText, setEditAutoCommentReplyText] = useState("");
 
   // Preview tab state
   const [previewTab, setPreviewTab] = useState<"FACEBOOK" | "INSTAGRAM" | "YOUTUBE" | "LINKEDIN" | "TIKTOK">("FACEBOOK");
@@ -600,6 +608,8 @@ export default function CalendarPage() {
         caption: caption || undefined,
         platformCaptions,
         scheduledAt: postDate.toISOString(),
+        autoCommentReplyEnabled,
+        autoCommentReplyText: autoCommentReplyEnabled ? autoCommentReplyText : undefined,
         ...(postType === "CAROUSEL"
           ? { mediaItems: carouselItems }
           : { mediaUrl }),
@@ -623,6 +633,8 @@ export default function CalendarPage() {
       setUploadProgress("");
       setCaption("");
       setGeneralContext("");
+      setAutoCommentReplyEnabled(false);
+      setAutoCommentReplyText("");
       setPlatformCaptions({
         INSTAGRAM: "",
         FACEBOOK: "",
@@ -656,6 +668,8 @@ export default function CalendarPage() {
         id: editingPost.id,
         caption: editCaption,
         scheduledAt: postDate.toISOString(),
+        autoCommentReplyEnabled: editAutoCommentReplyEnabled,
+        autoCommentReplyText: editAutoCommentReplyEnabled ? editAutoCommentReplyText : null,
       };
       if (editMediaUrl && editMediaUrl !== editingPost.mediaUrl) {
         payload.mediaUrl = editMediaUrl;
@@ -1197,6 +1211,58 @@ export default function CalendarPage() {
               />
             </div>
 
+            {/* Configuración de Auto-Respuesta a Comentarios (Lead Magnet / Link Trigger) */}
+            <div className="p-3.5 bg-gradient-to-r from-blue-950/20 via-purple-950/20 to-[#121214] border border-blue-500/20 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">💬</span>
+                  <div>
+                    <h4 className="text-xs font-semibold text-white flex items-center gap-1.5">
+                      Respuesta automática a comentarios
+                      <span className="text-[10px] font-normal px-1.5 py-0.2 bg-blue-500/20 text-blue-300 rounded border border-blue-500/30">
+                        Facebook & Instagram
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-gray-400">
+                      Envía un enlace o mensaje fijado cada vez que alguien comente este post.
+                    </p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoCommentReplyEnabled}
+                    onChange={(e) => setAutoCommentReplyEnabled(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+
+              {autoCommentReplyEnabled && (
+                <div className="pt-2 border-t border-white/5 space-y-1.5 animate-fadeIn">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-medium text-blue-200">
+                      Mensaje o enlace que se responderá automáticamente:
+                    </label>
+                    <span className="text-[10px] text-gray-400">
+                      {autoCommentReplyText.length} caracteres
+                    </span>
+                  </div>
+                  <textarea
+                    value={autoCommentReplyText}
+                    onChange={(e) => setAutoCommentReplyText(e.target.value)}
+                    placeholder="Ej: ¡Hola! Gracias por comentar. Aquí tienes toda la información y el enlace directo: https://tu-enlace.com 🚀"
+                    rows={2}
+                    className="input w-full px-3 py-2 text-xs bg-[#101012] border-blue-500/30 focus:border-blue-400 resize-none text-gray-200 leading-relaxed placeholder:text-gray-500"
+                  />
+                  <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                    <span>⚡</span> <span>Tiene prioridad máxima: el cron responderá esto directamente sin consumir tokens de IA.</span>
+                  </p>
+                </div>
+              )}
+            </div>
+
             {formError && (
               <p className="text-sm text-red-500">{formError}</p>
             )}
@@ -1702,6 +1768,14 @@ export default function CalendarPage() {
                       </p>
                     )}
 
+                    {/* Badge de auto-respuesta a comentarios activa */}
+                    {post.autoCommentReplyEnabled && (
+                      <div className="flex items-center gap-1.5 text-[10px] text-blue-300 bg-blue-950/40 border border-blue-500/20 px-2 py-1 rounded-md">
+                        <span>💬</span>
+                        <span className="truncate">Auto-respuesta activa: &ldquo;{post.autoCommentReplyText || ""}&rdquo;</span>
+                      </div>
+                    )}
+
                     {/* Card Footer with Actions and Status */}
                     <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-gray-500">
                       <div className="flex gap-2">
@@ -1711,6 +1785,8 @@ export default function CalendarPage() {
                             setEditingPost(post);
                             setEditCaption(post.caption || "");
                             setEditMediaUrl(post.mediaUrl || "");
+                            setEditAutoCommentReplyEnabled(Boolean(post.autoCommentReplyEnabled));
+                            setEditAutoCommentReplyText(post.autoCommentReplyText || "");
                             const date = new Date(post.scheduledAt);
                             setEditDate(date.toISOString().split("T")[0]);
                             const hours = String(date.getHours()).padStart(2, "0");
@@ -1795,6 +1871,33 @@ export default function CalendarPage() {
                 rows={4}
                 className="input w-full px-3 py-2 text-sm bg-[#0a0a0b] border-white/10 resize-none text-white"
               />
+            </div>
+
+            {/* Auto-respuesta a comentarios en edición */}
+            <div className="p-3 bg-[#0a0a0b] border border-blue-500/20 rounded-lg space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+                  💬 Auto-respuesta a comentarios
+                </span>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editAutoCommentReplyEnabled}
+                    onChange={(e) => setEditAutoCommentReplyEnabled(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-8 h-4 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+              {editAutoCommentReplyEnabled && (
+                <textarea
+                  value={editAutoCommentReplyText}
+                  onChange={(e) => setEditAutoCommentReplyText(e.target.value)}
+                  placeholder="Mensaje o enlace que se responderá automáticamente..."
+                  rows={2}
+                  className="input w-full px-3 py-1.5 text-xs bg-[#121214] border-blue-500/30 resize-none text-gray-200"
+                />
+              )}
             </div>
 
             {/* Date + Time */}

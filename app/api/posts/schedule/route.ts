@@ -18,6 +18,8 @@ const schema = z.object({
   mediaItems: z.array(mediaItemSchema).optional(), // solo para CAROUSEL
   thumbnailUrl: z.string().url().optional(),
   scheduledAt: z.string(), // ISO date string
+  autoCommentReplyEnabled: z.boolean().optional(),
+  autoCommentReplyText: z.string().optional().nullable(),
 });
 
 export async function POST(req: NextRequest) {
@@ -32,7 +34,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { socialAccountIds, type, caption, platformCaptions, mediaUrl, mediaItems, thumbnailUrl, scheduledAt } = parsed.data;
+  const {
+    socialAccountIds,
+    type,
+    caption,
+    platformCaptions,
+    mediaUrl,
+    mediaItems,
+    thumbnailUrl,
+    scheduledAt,
+    autoCommentReplyEnabled,
+    autoCommentReplyText,
+  } = parsed.data;
 
   // Validación: CAROUSEL necesita mediaItems, el resto necesita mediaUrl
   if (type === "CAROUSEL" && (!mediaItems || mediaItems.length < 2)) {
@@ -110,6 +123,8 @@ export async function POST(req: NextRequest) {
         thumbnailUrl,
         scheduledAt: new Date(scheduledAt),
         status: "SCHEDULED",
+        autoCommentReplyEnabled: Boolean(autoCommentReplyEnabled),
+        autoCommentReplyText: autoCommentReplyEnabled ? (autoCommentReplyText || null) : null,
         ...(type === "CAROUSEL" && mediaItems
           ? {
               mediaItems: {
@@ -193,6 +208,8 @@ const patchSchema = z.object({
   caption: z.string().optional(),
   mediaUrl: z.string().url().optional(),
   scheduledAt: z.string(), // ISO date string
+  autoCommentReplyEnabled: z.boolean().optional(),
+  autoCommentReplyText: z.string().optional().nullable(),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -207,7 +224,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { id, caption, mediaUrl, scheduledAt } = parsed.data;
+  const { id, caption, mediaUrl, scheduledAt, autoCommentReplyEnabled, autoCommentReplyText } = parsed.data;
 
   // Verificar propiedad
   const post = await prisma.scheduledPost.findFirst({
@@ -223,6 +240,10 @@ export async function PATCH(req: NextRequest) {
       caption,
       mediaUrl: mediaUrl !== undefined ? mediaUrl : undefined,
       scheduledAt: new Date(scheduledAt),
+      autoCommentReplyEnabled: autoCommentReplyEnabled !== undefined ? autoCommentReplyEnabled : undefined,
+      autoCommentReplyText: autoCommentReplyEnabled !== undefined
+        ? (autoCommentReplyEnabled ? (autoCommentReplyText || null) : null)
+        : undefined,
     },
   });
 

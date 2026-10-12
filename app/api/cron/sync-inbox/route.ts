@@ -60,6 +60,12 @@ export async function GET(req: NextRequest) {
             for (const comment of post.comments) {
               const commentDate = comment.created_time ? new Date(comment.created_time) : new Date();
 
+              // BLINDAJE ANTI-BUCLES: Ignorar comentarios hechos por la propia página
+              if (comment.from?.id && comment.from.id === account.externalId) {
+                totalSkipped++;
+                continue;
+              }
+
               if (!existingExternalIds.has(comment.id)) {
                 const newItem = await prisma.inboxItem.create({
                   data: {
@@ -147,6 +153,12 @@ export async function GET(req: NextRequest) {
           for (const media of mediaWithComments) {
             for (const comment of media.comments) {
               const commentDate = comment.created_time ? new Date(comment.created_time) : new Date();
+
+              // BLINDAJE ANTI-BUCLES: Ignorar comentarios hechos por la propia cuenta de Instagram
+              if (comment.from?.id && comment.from.id === account.externalId) {
+                totalSkipped++;
+                continue;
+              }
 
               if (!existingExternalIds.has(comment.id)) {
                 const newItem = await prisma.inboxItem.create({

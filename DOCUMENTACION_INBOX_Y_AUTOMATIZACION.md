@@ -70,3 +70,28 @@ Para lograr que la **IA responda solita todos los comentarios y DMs sin interven
 - Filtro de sentimiento y relevancia (evitar responder a emojis repetidos o mensajes de bots).
 - Control de frecuencia (no responder más de una vez por hilo si el usuario no ha vuelto a preguntar).
 - Ventana de 24 horas de Meta (validar que el mensaje tenga menos de 24h antes de intentar enviar el DM).
+
+---
+
+## 4. Auto-Respuesta Específica por Publicación (Lead Magnets & Enlaces) 🚀
+
+Permite que al programar o editar una publicación en el Calendario, el usuario configure un mensaje o enlace específico para auto-responder a cualquier persona que comente esa publicación (ej: para campañas *"Comenta y te paso el link"*).
+
+### Arquitectura y Jerarquía de Prioridad:
+1. **Detección vía Cron (`/api/cron/sync-inbox`):**
+   - El cron detecta comentarios nuevos en Facebook e Instagram y los guarda en `InboxItem`.
+   - Llama a `processInboxItemWithAi(inboxItemId)`.
+2. **Jerarquía Nivel 1 (Prioridad Máxima - Regla del Post):**
+   - El sistema localiza si el comentario pertenece a un `ScheduledPost` en la base de datos a través de `externalPostId == item.parentId`.
+   - Si ese post tiene `autoCommentReplyEnabled = true` y tiene un mensaje configurado (`autoCommentReplyText`):
+     - **Bloqueo atómico preventivo:** Marca el `InboxItem` como `ANSWERED` y `aiReplied = true` de inmediato para prevenir colisiones entre ciclos del cron.
+     - **Cero consumo de IA:** Despacha directamente el texto/link del post sin gastar tokens de Groq ni llamar a la IA.
+     - Simula un retardo natural (2 a 4 segundos) para evitar bloqueos por rate limit de Meta.
+     - Envía la respuesta vía Graph API o Make webhook.
+3. **Jerarquía Nivel 2 (Regla Global / IA Asistida):**
+   - Si el post **no** tiene activada una respuesta propia, el sistema continúa con el flujo habitual (evalúa la IA contextual o lo deja pendiente en el Inbox).
+
+### Campos de Base de Datos añadidos en `ScheduledPost`:
+* `autoCommentReplyEnabled` (`Boolean`, default: `false`)
+* `autoCommentReplyText` (`String?`, `@db.Text`)
+

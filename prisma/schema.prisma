@@ -149,6 +149,10 @@ model ScheduledPost {
   tiktokNotification TikTokNotification?
   analytics       PostAnalytics?
 
+  // Respuesta automática a comentarios en este post específico
+  autoCommentReplyEnabled Boolean @default(false)
+  autoCommentReplyText    String? @db.Text
+
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
