@@ -5,6 +5,7 @@ import { publishFacebookPost, publishInstagramMedia, publishFacebookCarousel, pu
 import { refreshYoutubeToken, uploadYoutubeVideo } from "@/lib/integrations/youtube";
 import { publishLinkedInPost, publishLinkedInVideo } from "@/lib/integrations/linkedin";
 import { formatPayloadForMake, sendToMakeWebhook } from "@/lib/integrations/make";
+import { parseYoutubeContent } from "@/lib/utils/youtube-cleaner";
 // publishTikTokVideo se importa dinámicamente solo cuando hay posts de TikTok,
 // para evitar que playwright-core crashee el arranque en Vercel serverless.
 
@@ -194,11 +195,13 @@ async function publishToPlatform(
       if (!videoRes.ok) throw new Error("No se pudo descargar el video desde mediaUrl.");
       const videoBuffer = Buffer.from(await videoRes.arrayBuffer());
 
+      const ytParsed = parseYoutubeContent(post!.caption);
+
       const res = await uploadYoutubeVideo({
         accessToken,
         videoBuffer,
-        title: post!.caption?.slice(0, 100) || "Video sin título",
-        description: post!.caption ?? undefined,
+        title: ytParsed.title,
+        description: ytParsed.description,
         isShort: post!.type === "SHORT",
         privacyStatus: "public",
       });

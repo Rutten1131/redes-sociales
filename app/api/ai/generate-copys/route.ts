@@ -20,9 +20,11 @@ export const DEFAULT_COPY_PROMPTS = {
 - Estructura: Gancho inicial corto -> Problema / Contexto -> Solución o lección aprendida -> Pregunta de debate o invitación al networking.
 - Formato: Frases cortas con doble salto de línea para facilitar lectura en móvil. Sin exceso de emojis. Máximo 3 hashtags profesionales.`,
 
-  YOUTUBE: `### ESTRATEGIA YOUTUBE (REGLA ESTRICTA DE CARACTERES):
-- Línea 1 (TÍTULO OBLIGATORIO): EXACTAMENTE MENOS DE 90 CARACTERES. YouTube rechaza terminantemente títulos de más de 100 caracteres. Debe ser atractivo, conciso y con gancho SEO.
-- A partir de la línea 2 (DESCRIPCIÓN):
+  YOUTUBE: `### ESTRATEGIA YOUTUBE (REGLA ESTRICTA DE CARACTERES Y FORMATO):
+- Línea 1 (TÍTULO DIRECTO): EXACTAMENTE MENOS DE 90 CARACTERES. Escribe directamente el título atractivo con gancho SEO. PROHIBIDO incluir la palabra "TÍTULO:", comillas o encabezados.
+- PROHIBIDO agregar secciones como "TÍTULOS ALTERNATIVOS".
+- A partir de la línea 2 (DESCRIPCIÓN DIRECTA):
+  * Escribe directamente la descripción sin la palabra "DESCRIPCIÓN:".
   * Resumen del contenido en 2 oraciones.
   * Puntos clave tratados (bullets).
   * Llamado a suscribirse y enlaces de contacto (WhatsApp / Web).
